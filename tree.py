@@ -54,6 +54,16 @@ def choose_split(
     y: np.ndarray, 
     feat_order: np.ndarray
 ) -> Optional[Node]:
+  total = np.count_nonzero(node.mask)
+
+  if total < MIN_LEAF_SIZE * 2:
+    # we need at least MIN_LEAF_SIZE points in both left child and right child
+    return None
+
+  trues = np.count_nonzero(y[node.mask])
+  falses = total - trues
+
+  total_gini = 
   return None
 
 
