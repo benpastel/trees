@@ -4,9 +4,6 @@ from typing import Optional
 import numpy as np
 
 
-DEFAULT_MIN_LEAF_SIZE = 10
-
-
 @dataclass 
 class Split:
   column: int
@@ -42,8 +39,7 @@ def choose_split(
     mask: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
-    feat_order: np.ndarray,
-    min_leaf_size = DEFAULT_MIN_LEAF_SIZE
+    min_leaf_size: int
 ) -> Optional[Split]:
   assert mask.dtype == np.bool
   assert mask.ndim == 1
@@ -52,13 +48,11 @@ def choose_split(
   total = np.count_nonzero(mask)
   if total < min_leaf_size * 2:
     # we need at least MIN_LEAF_SIZE points in both left child and right child
-    # print('small')
     return None
 
   orig_impurity = gini_impurity(y[mask])
   if orig_impurity < 0.0000000001:
     # already perfect
-    # print('perfect')
     return None
 
   min_impurity = orig_impurity
@@ -95,7 +89,6 @@ def choose_split(
 
   if best_col is None:
     # couldn't decrease impurity by splitting
-    # print(f'no improve on {orig_impurity}')
     return None
 
   assert best_val is not None # convince mypy
@@ -104,7 +97,6 @@ def choose_split(
   left_mask[mask] = (X[mask, best_col] <= best_val)
   right_mask[mask] = (X[mask, best_col] > best_val)
   split = Split(best_col, best_val, left_mask, right_mask)
-  print(f'best split: {split}.  impurity: {orig_impurity:.4f} => {min_impurity:.4f}')
   return split
 
 

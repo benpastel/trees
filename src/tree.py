@@ -42,7 +42,7 @@ class Model:
 
 
 
-def fit(X: np.ndarray, y: np.ndarray) -> Model:
+def fit(X: np.ndarray, y: np.ndarray, min_leaf_size: int) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
 
@@ -50,17 +50,13 @@ def fit(X: np.ndarray, y: np.ndarray) -> Model:
   X = X.astype(float)
   y = y.astype(bool)
 
-  # sort each feature
-  feat_order = X.argsort(axis=0)
-
   root = Node(np.ones(X.shape[0], dtype=bool))
   open_nodes = [root]
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
-    print(f'considering: {node}')
 
-    split = choose_split(node.mask, X, y, feat_order)
+    split = choose_split(node.mask, X, y, min_leaf_size)
 
     if split is None:
       # leaf
@@ -74,3 +70,22 @@ def fit(X: np.ndarray, y: np.ndarray) -> Model:
       open_nodes.append(node.right_child)
 
   return Model(root)
+
+
+def predict(model: Model, X: np.ndarray) -> np.ndarray:
+  assert X.ndim == 2
+  probs = np.zeros(len(X))
+
+  for i in range(X.shape[0]):
+    node = model.root
+    while node.split is not None:
+      if X[i, node.split.column] <= node.split.value:
+        node = node.left_child
+      else:
+        node = node.right_child
+    probs[i] = node.value
+
+  return probs >= 0.5
+
+
+
