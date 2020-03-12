@@ -34,15 +34,16 @@ if __name__ == '__main__':
     # split a validation set
     all_X, all_y = load_data('data/credit/application_train.csv')
 
-    valid_count = len(all_X) - 30000
+
+    valid_count = len(all_X) // 5 # 20%
     valid_set = np.random.choice(np.arange(len(all_X)), size=valid_count, replace=False)
     is_valid = np.zeros(len(all_X), dtype=bool)
     is_valid[valid_set] = True
-
     train_X = all_X[~is_valid]
     train_y = all_y[~is_valid]
     valid_X = all_X[is_valid]
     valid_y = all_y[is_valid]
+  print(f'{train_X.shape=} {valid_X.shape=}')
 
   with timed('fit XGB'):
     model = xgb.XGBClassifier(n_estimators = 1)
@@ -59,7 +60,7 @@ if __name__ == '__main__':
 
   min_leaf_size = 100
 
-  with timed(f'Fit tree with min_leaf_size={min_leaf_size} on {train_X.shape} '):
+  with timed(f'Fit tree with min_leaf_size={min_leaf_size}: '):
     # with cProfile.Profile() as pr:
     model = fit(train_X, train_y, min_leaf_size=min_leaf_size)
   # pr.print_stats()
