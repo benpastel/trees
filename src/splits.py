@@ -34,7 +34,7 @@ def gini_impurity(A: np.ndarray) -> float:
 
   return 2.0 * trues * falses / (len(A) * len(A))
 
-
+SPLITS_TO_CONSIDER = 256
 def choose_split(
     mask: np.ndarray,
     X: np.ndarray, 
@@ -65,10 +65,11 @@ def choose_split(
   right_mask = np.zeros(X.shape[0], dtype=bool)
 
   for col in range(X.shape[1]):
-    # check every unique value in the simplest way
-    # ignore the pre-sorted orders for now
-    for val in np.unique(X[mask, col]):
+    # try up to SPLITS_TO_CONSIDER unique values
+    vals = np.unique(X[mask, col])
+    stride = 1 + len(vals) // SPLITS_TO_CONSIDER
 
+    for val in vals[::stride]:
       left_mask[:] = 0
       right_mask[:] = 0
       left_mask[mask] = (X[mask, col] <= val)
