@@ -7,5 +7,5 @@ def timed(msg: str):
   start = time()
   yield
   stop = time()
-  print(f'{stop - start:.1f} seconds')
+  print(f'({stop - start:.1f}s)')
 
