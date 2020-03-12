@@ -8,9 +8,8 @@ from splits import Split, choose_split
 
 @dataclass
 class Node:
-  # boolean mask over input data
-  # true where data is in leaf
-  mask: np.ndarray
+  # indices in the input data contained in this node
+  idx: np.ndarray
 
   # stay None for leaves
   split: Optional[Split] = None
@@ -25,7 +24,7 @@ class Node:
     indent = '    ' * level
     if self.split is None:
       # leaf
-      return f'{indent}value: {self.value}, count: {np.count_nonzero(self.mask)}\n'
+      return f'{indent}value: {self.value}, count: {len(self.idx)}\n'
     else:
       # non-leaf
       return (f'{indent}feature {self.split.column} at <= {self.split.value}:\n'
@@ -50,22 +49,23 @@ def fit(X: np.ndarray, y: np.ndarray, min_leaf_size: int) -> Model:
   X = X.astype(float)
   y = y.astype(bool)
 
-  root = Node(np.ones(X.shape[0], dtype=bool))
+  all_indices = np.arange(X.shape[0], dtype=np.intp)
+  root = Node(all_indices)
   open_nodes = [root]
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
 
-    split = choose_split(node.mask, X, y, min_leaf_size)
+    split = choose_split(node.idx, X, y, min_leaf_size)
 
     if split is None:
       # leaf
-      node.value = np.mean(y[node.mask])
+      node.value = np.mean(y[node.idx])
     else:
       # not a leaf
       node.split = split
-      node.left_child = Node(split.left_mask)
-      node.right_child = Node(split.right_mask)
+      node.left_child = Node(split.left_idx)
+      node.right_child = Node(split.right_idx)
       open_nodes.append(node.left_child)
       open_nodes.append(node.right_child)
 

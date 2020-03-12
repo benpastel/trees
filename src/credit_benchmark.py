@@ -34,7 +34,7 @@ if __name__ == '__main__':
     # split a validation set
     all_X, all_y = load_data('data/credit/application_train.csv')
 
-    valid_count = len(all_X) - 10000
+    valid_count = len(all_X) - 30000
     valid_set = np.random.choice(np.arange(len(all_X)), size=valid_count, replace=False)
     is_valid = np.zeros(len(all_X), dtype=bool)
     is_valid[valid_set] = True

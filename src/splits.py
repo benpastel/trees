@@ -8,13 +8,13 @@ import numpy as np
 class Split:
   column: int
   value: float
-  left_mask: np.ndarray
-  right_mask: np.ndarray
+  left_idx: np.ndarray
+  right_idx: np.ndarray
 
   def __str__(self):
     return (f'col: {self.column}, val: {self.value}, ' 
-      + f'left_count: {np.count_nonzero(self.left_mask)}, '
-      + f'right_count: {np.count_nonzero(self.right_mask)}')
+      + f'left_count: {len(self.left_idx)}, '
+      + f'right_count: {len(self.right_idx)}')
 
 
 def gini_impurity(A: np.ndarray) -> float:
@@ -31,73 +31,55 @@ def gini_impurity(A: np.ndarray) -> float:
 
   trues = np.count_nonzero(A)
   falses = len(A) - trues
-
   return 2.0 * trues * falses / (len(A) * len(A))
+
 
 SPLITS_TO_CONSIDER = 256
 def choose_split(
-    mask: np.ndarray,
+    idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
     min_leaf_size: int
 ) -> Optional[Split]:
-  assert mask.dtype == np.bool
-  assert mask.ndim == 1
-  assert len(mask) == len(y)
+  assert idx.dtype == np.intp
+  assert idx.ndim == 1
 
-  total = np.count_nonzero(mask)
-  if total < min_leaf_size * 2:
+  if len(idx) < min_leaf_size * 2:
     # we need at least MIN_LEAF_SIZE points in both left child and right child
     return None
 
-  orig_impurity = gini_impurity(y[mask])
+  orig_impurity = gini_impurity(y[idx])
   if orig_impurity < 0.0000000001:
     # already perfect
     return None
 
   min_impurity = orig_impurity
-
-  # exhaustively try every split and take the best one
-  best_col = None
-  best_val = None
-
-  left_mask = np.zeros(X.shape[0], dtype=bool)
-  right_mask = np.zeros(X.shape[0], dtype=bool)
+  best_split = None
 
   for col in range(X.shape[1]):
+
     # try up to SPLITS_TO_CONSIDER unique values
-    vals = np.unique(X[mask, col])
-    stride = 1 + len(vals) // SPLITS_TO_CONSIDER
+    vals = X[idx, col]
+    uniqs = np.unique(vals)
+    stride = 1 + len(uniqs) // SPLITS_TO_CONSIDER
 
-    for val in vals[::stride]:
-      left_mask[:] = 0
-      right_mask[:] = 0
-      left_mask[mask] = (X[mask, col] <= val)
-      right_mask[mask] = (X[mask, col] > val)
+    for val in uniqs[::stride]:
+      left_idx = idx[vals <= val]
+      right_idx = idx[vals > val]
 
-      left_count = np.count_nonzero(left_mask)
-      right_count = np.count_nonzero(right_mask)
-
-      if (left_count < min_leaf_size) or (right_count < min_leaf_size):
+      if len(left_idx) < min_leaf_size or len(right_idx) < min_leaf_size:
         continue
 
-      impurity = gini_impurity(y[left_mask]) + gini_impurity(y[right_mask])
+      impurity = gini_impurity(y[left_idx]) + gini_impurity(y[right_idx])
 
       if impurity < min_impurity:
         min_impurity = impurity
-        best_col = col 
-        best_val = val
+        best_split = Split(col, val, left_idx, right_idx)
 
-  if best_col is None:
+  if best_split is None:
     # couldn't decrease impurity by splitting
     return None
 
-  assert best_val is not None # convince mypy
-  left_mask[:] = 0
-  right_mask[:] = 0
-  left_mask[mask] = (X[mask, best_col] <= best_val)
-  right_mask[mask] = (X[mask, best_col] > best_val)
-  split = Split(best_col, best_val, left_mask, right_mask)
-  return split
+  return best_split
 
 

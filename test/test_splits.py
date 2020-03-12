@@ -33,7 +33,7 @@ def test_choose_split():
     False,
   ])
   split = choose_split(
-    np.ones(4, dtype=bool),
+    np.arange(4, dtype=np.intp),
     X,
     y,
     min_leaf_size=1
