@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 
 
-MIN_LEAF_SIZE = 100
+DEFAULT_MIN_LEAF_SIZE = 10
 
 
 @dataclass 
@@ -42,21 +42,26 @@ def choose_split(
     mask: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
-    feat_order: np.ndarray
+    feat_order: np.ndarray,
+    min_leaf_size = DEFAULT_MIN_LEAF_SIZE
 ) -> Optional[Split]:
   assert mask.dtype == np.bool
   assert mask.ndim == 1
   assert len(mask) == len(y)
 
   total = np.count_nonzero(mask)
-  if total < MIN_LEAF_SIZE * 2:
+  if total < min_leaf_size * 2:
     # we need at least MIN_LEAF_SIZE points in both left child and right child
+    # print('small')
     return None
 
-  min_impurity = gini_impurity(y[mask])
-  if min_impurity < 0.0000000001:
+  orig_impurity = gini_impurity(y[mask])
+  if orig_impurity < 0.0000000001:
     # already perfect
+    # print('perfect')
     return None
+
+  min_impurity = orig_impurity
 
   # exhaustively try every split and take the best one
   best_col = None
@@ -66,7 +71,6 @@ def choose_split(
   right_mask = np.zeros(X.shape[0], dtype=bool)
 
   for col in range(X.shape[1]):
-
     # check every unique value in the simplest way
     # ignore the pre-sorted orders for now
     for val in np.unique(X[mask, col]):
@@ -79,7 +83,7 @@ def choose_split(
       left_count = np.count_nonzero(left_mask)
       right_count = np.count_nonzero(right_mask)
 
-      if (left_count < MIN_LEAF_SIZE) or (right_count < MIN_LEAF_SIZE):
+      if (left_count < min_leaf_size) or (right_count < min_leaf_size):
         continue
 
       impurity = gini_impurity(y[left_mask]) + gini_impurity(y[right_mask])
@@ -91,6 +95,7 @@ def choose_split(
 
   if best_col is None:
     # couldn't decrease impurity by splitting
+    # print(f'no improve on {orig_impurity}')
     return None
 
   assert best_val is not None # convince mypy
@@ -99,7 +104,7 @@ def choose_split(
   left_mask[mask] = (X[mask, best_col] <= best_val)
   right_mask[mask] = (X[mask, best_col] > best_val)
   split = Split(best_col, best_val, left_mask, right_mask)
-  print(f'best split: {split}.  impurity: {impurity:.4f} => {min_impurity:.4f}')
+  print(f'best split: {split}.  impurity: {orig_impurity:.4f} => {min_impurity:.4f}')
   return split
 
 

@@ -19,19 +19,8 @@ def test_gini_impurity():
 
 
 def test_choose_split():
-
-  X = np.array([
-    [0],
-    [0],
-
-  ])
-
-  y = np.array([
-    True, 
-    True,
-
-
-  ])
+  pass
+  # TODO: left off here
 
 
   

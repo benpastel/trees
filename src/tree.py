@@ -25,8 +25,7 @@ class Node:
     indent = '    ' * level
     if self.split is None:
       # leaf
-      assert self.value is not None
-      return f'{indent}value: {self.value:.4f}, count: {np.count_nonzero(self.mask)}\n'
+      return f'{indent}value: {self.value}, count: {np.count_nonzero(self.mask)}\n'
     else:
       # non-leaf
       return (f'{indent}feature {self.split.column} at <= {self.split.value}:\n'
@@ -59,9 +58,9 @@ def fit(X: np.ndarray, y: np.ndarray) -> Model:
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
+    print(f'considering: {node}')
+
     split = choose_split(node.mask, X, y, feat_order)
-
-
 
     if split is None:
       # leaf
