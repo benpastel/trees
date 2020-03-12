@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..src.splits import gini_impurity
+from ..src.splits import gini_impurity, choose_split
 
 
 def test_gini_impurity():
@@ -19,8 +19,28 @@ def test_gini_impurity():
 
 
 def test_choose_split():
-  pass
-  # TODO: left off here
+  # this case is perfectly split by 2nd column
+  X = np.array([
+    [0, 0],
+    [1, 1],
+    [1, 0],
+    [1, 1],
+  ])
+  y = np.array([
+    True,
+    False,
+    True,
+    False,
+  ])
+  split = choose_split(
+    np.ones(4, dtype=bool),
+    X,
+    y,
+    min_leaf_size=1
+  )
+  assert split is not None
+  assert split.column == 1
+  assert split.value == 0
 
 
   
