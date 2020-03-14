@@ -10,6 +10,7 @@ from splits import Split, choose_split
 class Node:
   # indices in the input data contained in this node
   idx: np.ndarray
+  depth: int
 
   # stay None for leaves
   split: Optional[Split] = None
@@ -35,13 +36,20 @@ class Node:
 @dataclass
 class Model:
   root: Node
+  node_count: int
+  leaf_count: int
 
   def __str__(self):
-    return f'model with nodes:\n{str(self.root)}'
+    return f'model with {self.node_count} nodes and {self.leaf_count} leaves'
 
 
-
-def fit(X: np.ndarray, y: np.ndarray, min_leaf_size: int) -> Model:
+MAX_DEPTH = 6
+def fit(
+    X: np.ndarray, 
+    y: np.ndarray, 
+    min_leaf_size: int, 
+    max_depth: int = MAX_DEPTH
+) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
 
@@ -50,26 +58,28 @@ def fit(X: np.ndarray, y: np.ndarray, min_leaf_size: int) -> Model:
   y = y.astype(bool)
 
   all_indices = np.arange(X.shape[0], dtype=np.intp)
-  root = Node(all_indices)
+  root = Node(all_indices, depth=1)
+  node_count = 1
+  leaf_count = 0
   open_nodes = [root]
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
-
-    split = choose_split(node.idx, X, y, min_leaf_size)
-
-    if split is None:
+    
+    if node.depth == max_depth or (split := choose_split(node.idx, X, y, min_leaf_size)) is None:
       # leaf
       node.value = np.mean(y[node.idx])
+      leaf_count += 1
     else:
       # not a leaf
       node.split = split
-      node.left_child = Node(split.left_idx)
-      node.right_child = Node(split.right_idx)
+      node.left_child = Node(split.left_idx, node.depth + 1)
+      node.right_child = Node(split.right_idx, node.depth + 1)
       open_nodes.append(node.left_child)
       open_nodes.append(node.right_child)
+      node_count += 2
 
-  return Model(root)
+  return Model(root, node_count, leaf_count)
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:

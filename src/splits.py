@@ -35,11 +35,13 @@ def gini_impurity(A: np.ndarray) -> float:
 
 
 SPLITS_TO_CONSIDER = 256
+EXTRA_LEAF_PENALTY = 0.0
 def choose_split(
     idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
-    min_leaf_size: int
+    min_leaf_size: int,
+    extra_leaf_penalty: float = EXTRA_LEAF_PENALTY
 ) -> Optional[Split]:
   assert idx.dtype == np.intp
   assert idx.ndim == 1
@@ -49,7 +51,7 @@ def choose_split(
     return None
 
   orig_impurity = gini_impurity(y[idx])
-  if orig_impurity < 0.0000000001:
+  if orig_impurity <= extra_leaf_penalty:
     # already perfect
     return None
 
@@ -57,7 +59,6 @@ def choose_split(
   best_split = None
 
   for col in range(X.shape[1]):
-
     # try up to SPLITS_TO_CONSIDER unique values
     vals = X[idx, col]
     uniqs = np.unique(vals)
@@ -70,7 +71,7 @@ def choose_split(
       if len(left_idx) < min_leaf_size or len(right_idx) < min_leaf_size:
         continue
 
-      impurity = gini_impurity(y[left_idx]) + gini_impurity(y[right_idx])
+      impurity = (gini_impurity(y[left_idx]) + gini_impurity(y[right_idx])) / 2.0 + extra_leaf_penalty
 
       if impurity < min_impurity:
         min_impurity = impurity

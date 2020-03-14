@@ -53,6 +53,8 @@ if __name__ == '__main__':
     train_preds = model.predict(train_X)
     valid_preds = model.predict(valid_X)
 
+  # print(model.get_booster().get_dump())
+
   print(f'''XGBoost on credit default, single tree:
     train accuracy: {100.0 * np.mean(train_preds == train_y):.2f}%
     test accuracy: {100.0 * np.mean(valid_preds == valid_y):.2f}%
@@ -60,10 +62,26 @@ if __name__ == '__main__':
 
   min_leaf_size = 100
 
+  import cProfile, pstats, io
+  from pstats import SortKey
   with timed(f'Fit tree with min_leaf_size={min_leaf_size}: '):
     # with cProfile.Profile() as pr:
     model = fit(train_X, train_y, min_leaf_size=min_leaf_size)
-  # pr.print_stats()
+  # print('cumulative:')
+  # s = io.StringIO()
+  # sortby = SortKey.CUMULATIVE
+  # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+  # ps.print_stats(16)
+  # print(s.getvalue())
+
+  # print('time:')
+  # s = io.StringIO()
+  # sortby = SortKey.TIME
+  # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+  # ps.print_stats(16)
+  # print(s.getvalue())
+
+  print(model)
 
   with timed('predict tree'):
     train_preds = predict(model, train_X)

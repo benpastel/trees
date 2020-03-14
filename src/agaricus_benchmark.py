@@ -28,8 +28,8 @@ if __name__ == '__main__':
     model = fit(train_X, train_y, min_leaf_size=min_leaf_size)
     train_preds = predict(model, train_X)
     test_preds = predict(model, test_X)
-
     print(f'''Tree on agaricus, min_leaf_size = {min_leaf_size}:
       train accuracy: {100.0 * np.mean(train_preds == train_y):.2f}%
       test accuracy: {100.0 * np.mean(test_preds == test_y):.2f}%
+      model: {model}
     ''')
