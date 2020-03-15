@@ -51,14 +51,12 @@ def choose_split(
     # we need at least MIN_LEAF_SIZE points in both left child and right child
     return None
 
-  orig_impurity = gini_impurity(y[idx])
-  
-  if orig_impurity <= extra_leaf_penalty:
+  min_impurity = gini_impurity(y[idx])
+  best_split = None
+
+  if min_impurity <= extra_leaf_penalty:
     # already perfect
     return None
-
-  min_impurity = orig_impurity
-  best_split = None
 
   for col in range(X.shape[1]):
     vals = X[idx, col]

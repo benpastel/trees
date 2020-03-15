@@ -60,34 +60,17 @@ if __name__ == '__main__':
     test accuracy: {100.0 * np.mean(valid_preds == valid_y):.2f}%
   ''')
 
-  min_leaf_size = 100
+  for min_leaf_size in [10, 100, 1000]:
+    print(f'Tree with {min_leaf_size=}')
+    with timed(f'fit: '):
+      model = fit(train_X, train_y, min_leaf_size=min_leaf_size)
+    print(model)
 
-  import cProfile, pstats, io
-  from pstats import SortKey
-  with timed(f'Fit tree with min_leaf_size={min_leaf_size}: '):
-    # with cProfile.Profile() as pr:
-    model = fit(train_X, train_y, min_leaf_size=min_leaf_size)
-  # print('cumulative:')
-  # s = io.StringIO()
-  # sortby = SortKey.CUMULATIVE
-  # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-  # ps.print_stats(16)
-  # print(s.getvalue())
+    with timed('predict:'):
+      train_preds = predict(model, train_X)
+      valid_preds = predict(model, valid_X)
 
-  # print('time:')
-  # s = io.StringIO()
-  # sortby = SortKey.TIME
-  # ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-  # ps.print_stats(16)
-  # print(s.getvalue())
-
-  print(model)
-
-  with timed('predict tree'):
-    train_preds = predict(model, train_X)
-    valid_preds = predict(model, valid_X)
-
-  print(f'''Tree on credit default, min_leaf_size = {min_leaf_size}:
-    train accuracy: {100.0 * np.mean(train_preds == train_y):.2f}%
-    test accuracy: {100.0 * np.mean(valid_preds == valid_y):.2f}%
-  ''')
+    print(f'''Tree on credit default:
+      train accuracy: {100.0 * np.mean(train_preds == train_y):.2f}%
+      test accuracy: {100.0 * np.mean(valid_preds == valid_y):.2f}%
+    ''')
