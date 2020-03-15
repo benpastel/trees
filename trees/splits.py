@@ -34,7 +34,6 @@ def gini_impurity(A: np.ndarray) -> float:
   return 2.0 * trues * falses / (len(A) * len(A))
 
 
-SPLITS_TO_CONSIDER = 256
 EXTRA_LEAF_PENALTY = 0.0
 def choose_split(
     idx: np.ndarray,
@@ -45,12 +44,15 @@ def choose_split(
 ) -> Optional[Split]:
   assert idx.dtype == np.intp
   assert idx.ndim == 1
+  assert X.dtype == np.uint8
+  assert y.dtype == np.bool
 
   if len(idx) < min_leaf_size * 2:
     # we need at least MIN_LEAF_SIZE points in both left child and right child
     return None
 
   orig_impurity = gini_impurity(y[idx])
+  
   if orig_impurity <= extra_leaf_penalty:
     # already perfect
     return None
@@ -59,23 +61,32 @@ def choose_split(
   best_split = None
 
   for col in range(X.shape[1]):
-    # try up to SPLITS_TO_CONSIDER unique values
     vals = X[idx, col]
-    uniqs = np.unique(vals)
-    stride = 1 + len(uniqs) // SPLITS_TO_CONSIDER
+    totals = np.bincount(vals)
+    trues = np.bincount(vals[y[idx]], minlength=len(totals))
+  
+    left_totals = np.cumsum(totals)
+    right_totals = np.cumsum(totals[::-1])[::-1]
 
-    for val in uniqs[::stride]:
-      left_idx = idx[vals <= val]
-      right_idx = idx[vals > val]
+    left_trues = np.cumsum(trues)
+    right_trues = np.cumsum(trues[::-1])[::-1]
 
-      if len(left_idx) < min_leaf_size or len(right_idx) < min_leaf_size:
+    for v in range(len(totals) - 1):
+      # v is inclusive on left and exclusive on right, so add 1 to all right indices
+      if totals[v] == 0 or left_totals[v] < min_leaf_size or right_totals[v+1] < min_leaf_size:
         continue
 
-      impurity = (gini_impurity(y[left_idx]) + gini_impurity(y[right_idx])) / 2.0 + extra_leaf_penalty
+      left_false = left_totals[v] - left_trues[v]
+      right_false = right_totals[v+1] - right_trues[v+1]
+
+      gini_left = 2.0 * left_trues[v] * left_false / (left_totals[v] * left_totals[v])
+      gini_right = 2.0 * right_trues[v+1] * right_false / (right_totals[v+1] * right_totals[v+1])
+
+      impurity = (gini_left + gini_right) / 2.0 + extra_leaf_penalty
 
       if impurity < min_impurity:
         min_impurity = impurity
-        best_split = Split(col, val, left_idx, right_idx)
+        best_split = Split(col, v, idx[vals <= v], idx[vals > v])
 
   if best_split is None:
     # couldn't decrease impurity by splitting

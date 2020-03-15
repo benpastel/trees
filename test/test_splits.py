@@ -25,7 +25,7 @@ def test_choose_split():
     [1, 2],
     [1, 0],
     [1, 1],
-  ])
+  ], dtype=np.uint8)
   y = np.array([
     True,
     False,
@@ -42,5 +42,6 @@ def test_choose_split():
   assert split.column == 1
   assert split.value == 0
 
+  
 
   
