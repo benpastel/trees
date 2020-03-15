@@ -3,7 +3,7 @@ import numpy as np
 
 from sklearn.datasets import load_svmlight_file
 
-from tree import fit, predict
+from trees.tree import fit, predict
 
 
 if __name__ == '__main__':

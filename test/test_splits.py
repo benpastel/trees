@@ -1,6 +1,6 @@
 import numpy as np
 
-from ..src.splits import gini_impurity, choose_split
+from trees.splits import gini_impurity, choose_split
 
 
 def test_gini_impurity():

@@ -4,8 +4,8 @@ import xgboost as xgb
 import numpy as np
 import pandas as pd
 
-from tree import fit, predict
-from utils import timed
+from trees.tree import fit, predict
+from trees.utils import timed
 
 import cProfile
 

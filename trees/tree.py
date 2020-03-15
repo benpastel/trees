@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Dict
 
 import numpy as np
 
-from splits import Split, choose_split
+from trees.splits import Split, choose_split
 
 
 @dataclass
@@ -42,6 +42,43 @@ class Model:
   def __str__(self):
     return f'model with {self.node_count} nodes and {self.leaf_count} leaves'
 
+BUCKET_COUNT = 256 # uint8 buckets
+def choose_bucket_splits(
+    X: np.ndarray, 
+    bucket_count=BUCKET_COUNT
+) -> Dict[int, np.ndarray]:
+  # returns {col => bins}
+  # where bins is an array of right inclusive endpoints:
+  #   (values in bucket 0) <= bins[0] < (values in bucket 1) <= bins[1] ...
+  # 
+  # so that np.searchsorted(bins, vals) returns the buckets
+  splits: Dict[int, np.ndarray] = {}
+
+  for col in range(X.shape[1]):
+    uniqs = np.unique(X[:,col])
+
+    if len(uniqs) <= bucket_count:
+      # each value gets a bin
+      bins = uniqs
+    else:
+      # assign a roughly equal amount of unique values to each bin
+      # TODO weight by count
+      bins = np.zeros(bucket_count, uniqs.dtype)
+      for s in range(bucket_count):
+        # average step by len(uniqs) // bucket_count
+        # 
+        # right endpoint is inclusive, so -1 
+        # 
+        # so start with (s + 1) * (len(uniqs)) // bucket_count) - 1
+        # but then divide by bucket count last so that the extras a distributed evenly
+        idx = ((s+1) * len(uniqs)) // bucket_count - 1
+        print(f'{s=}, {idx=}')
+        bins[s] = uniqs[idx]
+
+    splits[col] = bins
+
+  return splits
+
 
 MAX_DEPTH = 6
 def fit(
@@ -53,8 +90,9 @@ def fit(
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
 
-  # start with binary classification over floats only
   X = X.astype(float)
+
+  # start with binary classification only
   y = y.astype(bool)
 
   all_indices = np.arange(X.shape[0], dtype=np.intp)
@@ -65,7 +103,7 @@ def fit(
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
-    
+
     if node.depth == max_depth or (split := choose_split(node.idx, X, y, min_leaf_size)) is None:
       # leaf
       node.value = np.mean(y[node.idx])
