@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, List
 
 import numpy as np
 
@@ -38,6 +38,7 @@ class Model:
   root: Node
   node_count: int
   leaf_count: int
+  bucket_splits: List[np.ndarray]
 
   def __str__(self):
     return f'model with {self.node_count} nodes and {self.leaf_count} leaves'
@@ -46,13 +47,13 @@ BUCKET_COUNT = 256 # uint8 buckets
 def choose_bucket_splits(
     X: np.ndarray, 
     bucket_count=BUCKET_COUNT
-) -> Dict[int, np.ndarray]:
-  # returns {col => bins}
+) -> List[np.ndarray]:
+  # returns a list of bins for each column
   # where bins is an array of right inclusive endpoints:
   #   (values in bucket 0) <= bins[0] < (values in bucket 1) <= bins[1] ...
   # 
   # so that np.searchsorted(bins, vals) returns the buckets
-  splits: Dict[int, np.ndarray] = {}
+  splits: List[np.ndarray] = []
 
   for col in range(X.shape[1]):
     uniqs = np.unique(X[:,col])
@@ -73,20 +74,20 @@ def choose_bucket_splits(
         # but then divide by bucket count last so that the extras a distributed evenly
         idx = ((s+1) * len(uniqs)) // bucket_count - 1
         bins[s] = uniqs[idx]
-    splits[col] = bins
+    splits.append(bins)
   return splits
 
 
 def apply_bucket_splits(
   X: np.ndarray,
-  splits: Dict[int, np.ndarray]
+  splits: List[np.ndarray]
 ) -> np.ndarray:
   ''' returns X bucketed into the splits '''
   assert X.ndim == 2
   assert X.shape[1] == len(splits)
 
   bucketed = np.zeros(X.shape, dtype=np.uint8)
-  for col, bins in splits.items():
+  for col, bins in enumerate(splits):
 
     # TODO: decide how to handle different dtypes
     assert X.dtype == bins.dtype 
@@ -109,7 +110,9 @@ def fit(
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
 
-  X = X.astype(float)
+  bucket_splits = choose_bucket_splits(X)
+  X = apply_bucket_splits(X, bucket_splits)
+  assert X.dtype == np.uint8
 
   # start with binary classification only
   y = y.astype(bool)
@@ -136,14 +139,16 @@ def fit(
       open_nodes.append(node.right_child)
       node_count += 2
 
-  return Model(root, node_count, leaf_count)
+  return Model(root, node_count, leaf_count, bucket_splits)
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
+  X = apply_bucket_splits(X, model.bucket_splits)
+
   probs = np.zeros(len(X))
 
-  for i in range(X.shape[0]):
+  for i in range(len(X)):
     node = model.root
     while node.split is not None:
       if X[i, node.split.column] <= node.split.value:

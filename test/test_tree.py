@@ -22,7 +22,7 @@ def test_choose_bucket_splits():
   assert_array_equal(bucketed, [0, 0, 1, 1, 1, 1, 2])
 
 def test_apply_bucket_splits():
-  splits = {0 : np.array([1, 3])}
+  splits = [np.array([1, 3])]
   X = np.array([
     [0],
     [1],
