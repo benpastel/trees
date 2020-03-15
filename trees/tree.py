@@ -72,12 +72,31 @@ def choose_bucket_splits(
         # so start with (s + 1) * (len(uniqs)) // bucket_count) - 1
         # but then divide by bucket count last so that the extras a distributed evenly
         idx = ((s+1) * len(uniqs)) // bucket_count - 1
-        print(f'{s=}, {idx=}')
         bins[s] = uniqs[idx]
-
     splits[col] = bins
-
   return splits
+
+
+def apply_bucket_splits(
+  X: np.ndarray,
+  splits: Dict[int, np.ndarray]
+) -> np.ndarray:
+  ''' returns X bucketed into the splits '''
+  assert X.ndim == 2
+  assert X.shape[1] == len(splits)
+
+  bucketed = np.zeros(X.shape, dtype=np.uint8)
+  for col, bins in splits.items():
+
+    # TODO: decide how to handle different dtypes
+    assert X.dtype == bins.dtype 
+    indices = np.searchsorted(bins, X[:, col])
+
+    # in the training case, indices should always be < len(buckets)
+    # in the prediction case, it's possible to see a new value outside the right endpoint
+    # include those in the rightmost bucket
+    bucketed[:, col] = np.minimum(len(bins) - 1, indices)
+  return bucketed
 
 
 MAX_DEPTH = 6
