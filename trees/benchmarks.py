@@ -108,10 +108,9 @@ if __name__ == '__main__':
   for b, name in enumerate(benchmark_names):
     print(f'\n\n{name}:\n')
 
-    with timed('loading data...'):
-      X, y = load_data_functions[b]()
-      train_X, train_y, valid_X, valid_y = split(X, y)
-      print(f'X.shape: train {train_X.shape}, valid {valid_X.shape}')
+    X, y = load_data_functions[b]()
+    train_X, train_y, valid_X, valid_y = split(X, y)
+    print(f'X.shape: train {train_X.shape}, valid {valid_X.shape}')
 
     # only handle regression or binary classification cases so far
     is_regression = (train_y.dtype != np.bool)
@@ -121,7 +120,7 @@ if __name__ == '__main__':
     else:
       print(f'binary classification with {np.count_nonzero(y)} true and {np.count_nonzero(~y)} false')
 
-    with timed(f'train & predict xgboost with: {xgboost_args[b]}'):
+    with timed(f'train & predict xgboost with: {xgboost_args[b]}...'):
       if is_regression:
         model = xgb.XGBRegressor(**xgboost_args[b])
       else:
@@ -133,7 +132,7 @@ if __name__ == '__main__':
 
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
 
-    with timed(f'train & predict our tree with {tree_args[b]}'):
+    with timed(f'train & predict our tree with {tree_args[b]}...'):
       model = fit(train_X, train_y, **tree_args[b])
 
       train_preds = predict(model, train_X)
