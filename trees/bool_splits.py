@@ -35,7 +35,7 @@ def gini_impurity(A: np.ndarray) -> float:
 
 
 EXTRA_LEAF_PENALTY = 0.0
-def choose_split(
+def choose_bool_split(
     idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 

@@ -3,8 +3,8 @@ from typing import Optional, List
 
 import numpy as np
 
-from trees.splits import Split, choose_split
-
+from trees.bool_splits import Split, choose_bool_split
+from trees.float_splits import choose_float_split
 
 @dataclass
 class Node:
@@ -114,8 +114,13 @@ def fit(
   X = apply_bucket_splits(X, bucket_splits)
   assert X.dtype == np.uint8
 
-  # start with binary classification only
-  y = y.astype(bool)
+
+  if y.dtype == np.bool:
+    print('binary output')
+    choose_split = choose_bool_split
+  else:
+    print('float output')
+    choose_split = choose_float_split
 
   all_indices = np.arange(X.shape[0], dtype=np.intp)
   root = Node(all_indices, depth=1)
