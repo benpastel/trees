@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.datasets import load_svmlight_file
 
 from trees.tree import fit, predict
+from trees.utils import stats
 
 
 if __name__ == '__main__':
