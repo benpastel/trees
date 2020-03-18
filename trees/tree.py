@@ -39,9 +39,11 @@ class Model:
   node_count: int
   leaf_count: int
   bucket_splits: List[np.ndarray]
+  float_targets: bool
 
   def __str__(self):
-    return f'model with {self.node_count} nodes and {self.leaf_count} leaves'
+    tree_type = "Regression" if self.float_targets else "Classification"
+    return f'{tree_type} tree with {self.node_count} nodes and {self.leaf_count} leaves'
 
 BUCKET_COUNT = 256 # uint8 buckets
 def choose_bucket_splits(
@@ -105,6 +107,7 @@ def fit(
     X: np.ndarray, 
     y: np.ndarray, 
     min_leaf_size: int, 
+    extra_leaf_penalty: float,
     max_depth: int = MAX_DEPTH
 ) -> Model:
   assert X.ndim == 2
@@ -114,12 +117,11 @@ def fit(
   X = apply_bucket_splits(X, bucket_splits)
   assert X.dtype == np.uint8
 
-
   if y.dtype == np.bool:
-    print('binary output')
+    float_targets = False
     choose_split = choose_bool_split
   else:
-    print('float output')
+    float_targets = True
     choose_split = choose_float_split
 
   all_indices = np.arange(X.shape[0], dtype=np.intp)
@@ -131,7 +133,7 @@ def fit(
   while len(open_nodes) > 0:
     node = open_nodes.pop()
 
-    if node.depth == max_depth or (split := choose_split(node.idx, X, y, min_leaf_size)) is None:
+    if node.depth == max_depth or (split := choose_split(node.idx, X, y, min_leaf_size, extra_leaf_penalty)) is None:
       # leaf
       node.value = np.mean(y[node.idx])
       leaf_count += 1
@@ -144,14 +146,14 @@ def fit(
       open_nodes.append(node.right_child)
       node_count += 2
 
-  return Model(root, node_count, leaf_count, bucket_splits)
+  return Model(root, node_count, leaf_count, bucket_splits, float_targets)
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
   X = apply_bucket_splits(X, model.bucket_splits)
 
-  probs = np.zeros(len(X))
+  values = np.zeros(len(X))
 
   for i in range(len(X)):
     node = model.root
@@ -160,9 +162,14 @@ def predict(model: Model, X: np.ndarray) -> np.ndarray:
         node = node.left_child
       else:
         node = node.right_child
-    probs[i] = node.value
+    values[i] = node.value
 
-  return probs >= 0.5
+  if model.float_targets:
+    return values
+  else:
+    # we only handle binary classification so far
+    # so the values are just probabilities
+    return values >= 0.5
 
 
 
