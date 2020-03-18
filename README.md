@@ -10,6 +10,5 @@ tests:
 
 benchmarks:
 ```
-python -m trees.agaricus_benchmark
-python -m trees.credit_benchmark
+python -m trees.benchmarks
 ```

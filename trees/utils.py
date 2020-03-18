@@ -18,7 +18,7 @@ def percent(num: int, denom: int) -> str:
   return f'{100.0 * num / denom:.2f}%'
 
 
-def stats(preds: np.ndarray, trues: np.ndarray) -> str:
+def binary_stats(preds: np.ndarray, trues: np.ndarray) -> str:
   assert preds.shape == trues.shape
   assert trues.ndim == 1
   accuracy = percent(np.count_nonzero(preds == trues), len(trues))
@@ -26,3 +26,11 @@ def stats(preds: np.ndarray, trues: np.ndarray) -> str:
   precision = percent(hits, np.count_nonzero(preds))
   recall = percent(hits, np.count_nonzero(trues))
   return f'accuracy = {accuracy}, precision = {precision}, recall = {recall}'
+
+
+def regression_stats(preds: np.ndarray, trues: np.ndarray) -> str:
+  assert preds.shape == trues.shape
+  assert trues.ndim == 1
+  mse = np.mean((preds - trues)  * (preds - trues))
+  mae = np.mean(np.abs(preds - trues))
+  return f'MSE: {mse:.1f}, MAE: {mae:.1f}'

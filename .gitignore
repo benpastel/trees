@@ -1,8 +1,5 @@
 __pycache__/
 .pytest_cache/
 .mypy_cache/
-data/credit
-data/santander
-data/zillow
-data/m5
+data/
 .DS_Store
