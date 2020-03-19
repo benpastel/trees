@@ -64,8 +64,10 @@ def choose_float_split(
     left_mean_sqs = left_sum_sqs / left_totals
     right_mean_sqs = right_sum_sqs / right_totals
 
-    var = (left_mean_sqs - (left_means * left_means) 
-        + right_mean_sqs - (right_means * right_means))
+    left_var = left_mean_sqs - (left_means * left_means) 
+    right_var = right_mean_sqs - (right_means * right_means)
+
+    scores = (left_var * left_totals + right_var * right_totals) / (2.0 * len(vals)) + extra_leaf_penalty
 
     # for left-inclusive splits, a valid place to split is one value before
     # the first time we see a unique value in the sorted array
@@ -87,12 +89,12 @@ def choose_float_split(
     if not np.any(can_split):
       continue
 
-    impurity = np.min(var[can_split]) + extra_leaf_penalty
+    impurity = np.min(scores)
 
     if impurity < min_impurity:
       min_impurity = impurity
 
-      best_idx = np.argmin(var[can_split])
+      best_idx = np.argmin(scores[can_split])
       best_val = ordered_vals[can_split][best_idx]
 
       # TODO: should be possible to get left & right index by slicing w/ best_idx
