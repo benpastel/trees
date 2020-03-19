@@ -218,6 +218,7 @@ if __name__ == '__main__':
 
     with timed(f'train & predict our tree with {tree_args[b]}...'):
       model = fit(train_X, train_y, **tree_args[b])
+      print(model.__str__(verbose=True))
 
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)

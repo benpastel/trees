@@ -80,7 +80,7 @@ def choose_bool_split(
       gini_left = 2.0 * left_trues[v] * left_false / (left_totals[v] * left_totals[v])
       gini_right = 2.0 * right_trues[v+1] * right_false / (right_totals[v+1] * right_totals[v+1])
 
-      impurity = (gini_left + gini_right) / 2.0 + extra_leaf_penalty
+      impurity = (gini_left * left_totals[v] + gini_right * right_totals[v+1]) / (2.0 * totals[v]) + extra_leaf_penalty
 
       if impurity < min_impurity:
         min_impurity = impurity

@@ -41,9 +41,12 @@ class Model:
   bucket_splits: List[np.ndarray]
   float_targets: bool
 
-  def __str__(self):
+  def __str__(self, verbose = False):
     tree_type = "Regression" if self.float_targets else "Classification"
-    return f'{tree_type} tree with {self.node_count} nodes and {self.leaf_count} leaves'
+    s = f'{tree_type} tree with {self.node_count} nodes and {self.leaf_count} leaves'
+    if verbose:
+      s += f':\n{self.root}'
+    return s
 
 BUCKET_COUNT = 256 # uint8 buckets
 def choose_bucket_splits(
