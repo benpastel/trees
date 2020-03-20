@@ -42,6 +42,34 @@ def load_agaricus():
   return X_svm.toarray(), y.astype(np.bool)
 
 
+def load_house_prices():
+  frame = pd.read_csv('data/houses/train.csv')
+  y = frame['SalePrice'].values
+
+  X = np.zeros((len(frame), 79))
+  c = 0
+  cols_to_skip = [
+    'Id',
+    'SalePrice'
+  ]
+  for name, contents in frame.iteritems():
+    if name in cols_to_skip:
+      continue
+
+    if not np.issubdtype(contents.dtype, np.number):
+      # xgboost needs a number encoding
+      # some of these columns mix strings and numbers
+      _, inverse = np.unique([str(v) for v in contents.values], return_inverse=True)
+      X[:, c] = inverse
+    else:
+      X[:, c] = contents.values
+    
+    c += 1
+  assert c == 79  
+  X[np.isnan(X)] = -1
+  return X, y
+
+
 def load_credit():
   frame = pd.read_csv('data/credit/application_train.csv')
   y = frame['TARGET'].values.astype(np.bool) 
@@ -163,6 +191,7 @@ def load_m5():
 if __name__ == '__main__':
   benchmark_names = [
     'Agaricus', 
+    'House Prices',
     'Home Credit Default Risk', 
     'Santander Value', 
     'M5'
@@ -170,6 +199,7 @@ if __name__ == '__main__':
 
   load_data_functions = [
     load_agaricus,
+    load_house_prices,
     load_credit,
     load_santander,
     load_m5
@@ -177,12 +207,14 @@ if __name__ == '__main__':
 
   xgboost_args = [
     {'n_estimators': 1, 'tree_method': 'exact'},
+    {'n_estimators': 1, 'tree_method': 'approx'},
     {'n_estimators': 1, 'tree_method': 'hist'},
     {'n_estimators': 1, 'tree_method': 'hist'},
     {'n_estimators': 1, 'tree_method': 'hist'},
   ]
 
   tree_args = [
+    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
     {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
     {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
     {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},

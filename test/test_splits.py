@@ -37,7 +37,8 @@ def test_choose_bool_split():
     np.arange(4, dtype=np.intp),
     X,
     y,
-    min_leaf_size=1
+    min_leaf_size=1,
+    extra_leaf_penalty=0.0
   )
   assert split is not None
   assert split.column == 1
@@ -57,7 +58,8 @@ def test_choose_float_split():
     np.arange(4, dtype=np.intp),
     X,
     y,
-    min_leaf_size=1
+    min_leaf_size=1,
+    extra_leaf_penalty=0.0
   )
   assert split is not None
   assert split.column == 1
@@ -72,7 +74,8 @@ def test_choose_float_split():
     np.arange(6, dtype=np.intp),
     X,
     y,
-    min_leaf_size=1
+    min_leaf_size=1,
+    extra_leaf_penalty=0.0
   )
   assert split is not None
   assert split.column == 0
@@ -84,9 +87,20 @@ def test_choose_float_split():
     np.arange(6, dtype=np.intp),
     X,
     y,
-    min_leaf_size=3
+    min_leaf_size=3,
+    extra_leaf_penalty=0.0
   )
   assert split is not None
   assert split.column == 0
   assert split.value == 1
+
+  # same case, but at super high extra leaf penalty we never split
+  split = choose_float_split(
+    np.arange(6, dtype=np.intp),
+    X,
+    y,
+    min_leaf_size=1,
+    extra_leaf_penalty=10.0
+  )
+  assert split is None
   

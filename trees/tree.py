@@ -25,7 +25,7 @@ class Node:
     indent = '    ' * level
     if self.split is None:
       # leaf
-      return f'{indent}value: {self.value}, count: {len(self.idx)}\n'
+      return f'{indent}value: {self.value:.2f}, count: {len(self.idx)}\n'
     else:
       # non-leaf
       return (f'{indent}feature {self.split.column} at <= {self.split.value}:\n'

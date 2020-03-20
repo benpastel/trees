@@ -11,13 +11,12 @@ def variance(A: np.ndarray):
   return np.mean(A * A) - (mean * mean)
 
 
-EXTRA_LEAF_PENALTY = 0.0
 def choose_float_split(
     idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
     min_leaf_size: int,
-    extra_leaf_penalty: float = EXTRA_LEAF_PENALTY
+    extra_leaf_penalty: float
 ) -> Optional[Split]:
   assert idx.dtype == np.intp
   assert idx.ndim == 1

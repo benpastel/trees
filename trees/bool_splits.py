@@ -34,13 +34,12 @@ def gini_impurity(A: np.ndarray) -> float:
   return 2.0 * trues * falses / (len(A) * len(A))
 
 
-EXTRA_LEAF_PENALTY = 0.0
 def choose_bool_split(
     idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray, 
     min_leaf_size: int,
-    extra_leaf_penalty: float = EXTRA_LEAF_PENALTY
+    extra_leaf_penalty: float
 ) -> Optional[Split]:
   assert idx.dtype == np.intp
   assert idx.ndim == 1
