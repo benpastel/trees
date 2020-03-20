@@ -127,6 +127,12 @@ def fit(
     float_targets = True
     choose_split = choose_float_split
 
+  # TODO: from here on we are learning 1 tree at a time
+  # start with eta * gradient
+  #   with initial prediction: np.mean(y)
+  #   eta = 1
+  #   gradient just is residuals (for MSE)
+
   all_indices = np.arange(X.shape[0], dtype=np.intp)
   root = Node(all_indices, depth=1)
   node_count = 1
@@ -138,6 +144,7 @@ def fit(
 
     if node.depth == max_depth or (split := choose_split(node.idx, X, y, min_leaf_size, extra_leaf_penalty)) is None:
       # leaf
+      # TODO: also update predictions for this tree here
       node.value = np.mean(y[node.idx])
       leaf_count += 1
     else:
@@ -157,6 +164,9 @@ def predict(model: Model, X: np.ndarray) -> np.ndarray:
   X = apply_bucket_splits(X, model.bucket_splits)
 
   values = np.zeros(len(X))
+
+  # TODO: start with all indices
+  # split them at each leaf instead
 
   for i in range(len(X)):
     node = model.root
