@@ -69,10 +69,10 @@ def fit_tree(
   while len(open_nodes) > 0:
     node = open_nodes.pop()
     idx = open_indices.pop()
-    X_T_in_node = X[idx, :].T
+    X_in_node = X[idx, :]
     y_in_node = y[idx]
 
-    if node.depth == params.max_depth or (split := choose_split(X_T_in_node, y_in_node, params)) is None:
+    if node.depth == params.max_depth or (split := choose_split(X_in_node, y_in_node, params)) is None:
       # leaf
       node.value = np.mean(y_in_node)
       preds[idx] = node.value
@@ -80,8 +80,8 @@ def fit_tree(
     else:
       # not leaf
       node.split = split
-      left_idx = idx[X_T_in_node[split.column, :] <= split.value]
-      right_idx = idx[X_T_in_node[split.column, :] > split.value]
+      left_idx = idx[X_in_node[:, split.column] <= split.value]
+      right_idx = idx[X_in_node[:, split.column] > split.value]
       node.left_child = Node(node.depth + 1, len(left_idx))
       node.right_child = Node(node.depth + 1, len(right_idx))
       
