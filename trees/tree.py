@@ -99,7 +99,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
 
   # BFS through nodes so that we know the parent indices when we reach the child
   open_nodes = [tree.root]
-  open_indices = np.arange(X.shape[0], dtype=np.intp)
+  open_indices = [np.arange(X.shape[0], dtype=np.intp)]
   values = np.zeros(len(X))
   while len(open_nodes) > 0:
     node = open_nodes.pop()

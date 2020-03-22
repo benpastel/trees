@@ -58,35 +58,43 @@ def choose_split(
     # right_counts = [4, 4, 3]
     # 
     left_counts = np.cumsum(counts[:-1])
-    left_sums = np.cumsum(sums[:-1])
-    left_sum_sqs = np.cumsum(sum_sqs[:-1])
+    right_counts = np.cumsum(counts[-1:0:-1])[::-1]
+
+    # only consider a value for splitting if:
+    #   a training row has that value
+    #   both sides of the split are large enough
+    # 
+    # this also prevents division by 0 in the variance calculations
+    ok = (counts[:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
+    if not np.any(ok):
+      continue
+    left_counts = left_counts[ok]
+    right_counts = right_counts[ok]
+
+    left_sums = np.cumsum(sums[:-1][ok])
+    left_sum_sqs = np.cumsum(sum_sqs[:-1][ok])
     left_means = left_sums / left_counts
     left_mean_sqs = left_sum_sqs / left_counts
     left_var = left_mean_sqs - (left_means * left_means) 
 
-    right_counts = np.cumsum(counts[-1:0:-1])[::-1]
-    right_sums = np.cumsum(sums[-1:0:-1])[::-1]
-    right_sum_sqs = np.cumsum(sum_sqs[-1:0:-1])[::-1]
+    right_sums = np.cumsum(sums[-1:0:-1])[::-1][ok]
+    right_sum_sqs = np.cumsum(sum_sqs[-1:0:-1])[::-1][ok]
     right_means = right_sums / right_counts
     right_mean_sqs = right_sum_sqs / right_counts
     right_var = right_mean_sqs - (right_means * right_means)
 
     scores = (left_var * left_counts + right_var * right_counts) / (2.0 * len(vals)) + params.extra_leaf_penalty
 
-    can_split = (counts[:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
+    impurity = np.min(scores)
 
-    if not np.any(can_split):
-      continue
-
-    assert np.all(scores[can_split] >= -0.0000001), f'overflow? {scores[can_split]}'
-
-    impurity = np.min(scores[can_split])
+    assert impurity >= -0.0000001, f'overflow?'
 
     if impurity < min_impurity:
       min_impurity = impurity
 
+      # scores corresponds to uniq_values[ok]
       uniq_vals = np.arange(len(counts) - 1)
-      best_val = uniq_vals[can_split][np.argmin(scores[can_split])]
+      best_val = uniq_vals[ok][np.argmin(scores)]
       best_split = Split(col, best_val)
 
   if best_split is None:
