@@ -46,68 +46,57 @@ def choose_split(
 
   for col in range(X.shape[1]):
     vals = X[idx, col]
-    order = np.argsort(vals)
+    ok_y = y[idx]
 
+    # aggregate statistics on each unique X value
+    counts = np.bincount(vals)
+    sums = np.bincount(vals, weights=ok_y)
+    sum_sqs = np.bincount(vals, weights=(ok_y * ok_y))
+
+    # choose the splitting value  
+    # 
+    # all of the vectorized ops are over the unique X values
+    # 
     # left side is inclusive and right side is exclusive
     # so for leftward stats, drop the last item
     # for rightward stats, drop the first item
     # 
     # e.g.:
     # 
-    # y[idx][order] = [0, 1, 2, 3]
-    #         asc_y = [0, 1, 2]       
-    #        desc_y = [3, 2, 1]
+    #       counts = [2, 0, 1, 3]
+    #  left_counts = [2, 2, 3]       
+    # right_counts = [4, 4, 3]
     # 
-    asc_y = y[idx][order][:-1]
-    desc_y = y[idx][order][-1:0:-1]
-
-    left_totals = np.arange(len(asc_y)) + 1
-    right_totals = left_totals[::-1]
-
-    left_sums = np.cumsum(asc_y)
-    right_sums = np.cumsum(desc_y)[::-1]
-    left_sum_sqs = np.cumsum(asc_y * asc_y)
-    right_sum_sqs = np.cumsum(desc_y * desc_y)[::-1]
-
-    left_means = left_sums / left_totals
-    right_means = right_sums / right_totals
-    left_mean_sqs = left_sum_sqs / left_totals
-    right_mean_sqs = right_sum_sqs / right_totals
-
+    left_counts = np.cumsum(counts[:-1])
+    left_sums = np.cumsum(sums[:-1])
+    left_sum_sqs = np.cumsum(sum_sqs[:-1])
+    left_means = left_sums / left_counts
+    left_mean_sqs = left_sum_sqs / left_counts
     left_var = left_mean_sqs - (left_means * left_means) 
+
+    right_counts = np.cumsum(counts[-1:0:-1])[::-1]
+    right_sums = np.cumsum(sums[-1:0:-1])[::-1]
+    right_sum_sqs = np.cumsum(sum_sqs[-1:0:-1])[::-1]
+    right_means = right_sums / right_counts
+    right_mean_sqs = right_sum_sqs / right_counts
     right_var = right_mean_sqs - (right_means * right_means)
 
-    scores = (left_var * left_totals + right_var * right_totals) / (2.0 * len(vals)) + params.extra_leaf_penalty
+    scores = (left_var * left_counts + right_var * right_counts) / (2.0 * len(vals)) + params.extra_leaf_penalty
 
-    # for left-inclusive splits, a valid place to split is one value before
-    # the first time we see a unique value in the sorted array
-    # 
-    # e.g. 
-    # ordered_vals: [2, 2, 2, 3, 3, 5]
-    #     uniq_idx: [0, 3, 5]
-    #    split_idx: [2, 4]
-    # 
-    ordered_vals = vals[order][:-1]
-    _, uniq_idx = np.unique(ordered_vals, return_index=True)
-    split_idx = uniq_idx[1:] - 1
+    can_split = (counts[:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
 
-    # TODO could use min_leaf_size start/stop offsets instead
-    can_split = np.zeros(len(asc_y), dtype=bool)
-    can_split[split_idx] = True
-    can_split &= (left_totals >= params.min_leaf_size)
-    can_split &= (right_totals >= params.min_leaf_size)
     if not np.any(can_split):
       continue
 
-    impurity = np.min(scores)
+    impurity = np.min(scores[can_split])
 
     if impurity < min_impurity:
       min_impurity = impurity
 
-      best_idx = np.argmin(scores[can_split])
-      best_val = ordered_vals[can_split][best_idx]
+      uniq_vals = np.arange(len(counts) - 1)
+      best_val = uniq_vals[can_split][np.argmin(scores[can_split])]
 
-      # TODO: should be possible to get left & right index by slicing w/ best_idx
+      # TODO: delay the idx calculation to the end?
       best_split = Split(col, best_val, idx[vals <= best_val], idx[vals > best_val])
 
 
