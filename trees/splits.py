@@ -17,12 +17,13 @@ def variance(A: np.ndarray):
 
 
 def choose_split(
-    X: np.ndarray, 
+    X_T: np.ndarray, 
     y: np.ndarray,
     params: Params
 ) -> Optional[Split]:
-  assert X.dtype == np.uint8
+  assert X_T.dtype == np.uint8
   assert y.ndim == 1
+  assert X_T.shape[1] == y.shape[0]
 
   if len(y) < params.min_leaf_size * 2:
     # we need at least min_leaf_size rows in both left child and right child
@@ -35,8 +36,8 @@ def choose_split(
     # cannot be improved by splitting
     return None
 
-  for col in range(X.shape[1]):
-    vals = X[:, col]
+  for col in range(X_T.shape[0]):
+    vals = X_T[col]
 
     # aggregate statistics on each unique X value
     counts = np.bincount(vals)
@@ -87,7 +88,7 @@ def choose_split(
 
     impurity = np.min(scores)
 
-    assert impurity >= -0.0000001, f'overflow?'
+    assert impurity >= -0.0000001, 'overflow?'
 
     if impurity < min_impurity:
       min_impurity = impurity
