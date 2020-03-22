@@ -8,14 +8,7 @@ from trees.params import Params
 @dataclass 
 class Split:
   column: int
-  value: float
-  left_idx: np.ndarray
-  right_idx: np.ndarray
-
-  def __str__(self):
-    return (f'col: {self.column}, val: {self.value}, ' 
-      + f'left_count: {len(self.left_idx)}, '
-      + f'right_count: {len(self.right_idx)}')
+  value: int
 
 
 def variance(A: np.ndarray):
@@ -24,34 +17,31 @@ def variance(A: np.ndarray):
 
 
 def choose_split(
-    idx: np.ndarray,
     X: np.ndarray, 
     y: np.ndarray,
     params: Params
 ) -> Optional[Split]:
-  assert idx.dtype == np.intp
-  assert idx.ndim == 1
   assert X.dtype == np.uint8
+  assert y.ndim == 1
 
-  if len(idx) < params.min_leaf_size * 2:
-    # we need at least MIN_LEAF_SIZE points in both left child and right child
+  if len(y) < params.min_leaf_size * 2:
+    # we need at least min_leaf_size rows in both left child and right child
     return None
 
-  min_impurity = variance(y[idx])
+  min_impurity = variance(y)
   best_split = None
 
   if min_impurity <= params.extra_leaf_penalty:
-    # already perfect
+    # cannot be improved by splitting
     return None
 
   for col in range(X.shape[1]):
-    vals = X[idx, col]
-    ok_y = y[idx]
+    vals = X[:, col]
 
     # aggregate statistics on each unique X value
     counts = np.bincount(vals)
-    sums = np.bincount(vals, weights=ok_y)
-    sum_sqs = np.bincount(vals, weights=(ok_y * ok_y))
+    sums = np.bincount(vals, weights=y)
+    sum_sqs = np.bincount(vals, weights=(y * y))
 
     # choose the splitting value  
     # 
@@ -88,6 +78,8 @@ def choose_split(
     if not np.any(can_split):
       continue
 
+    assert np.all(scores[can_split] >= -0.0000001), f'overflow? {scores[can_split]}'
+
     impurity = np.min(scores[can_split])
 
     if impurity < min_impurity:
@@ -95,10 +87,7 @@ def choose_split(
 
       uniq_vals = np.arange(len(counts) - 1)
       best_val = uniq_vals[can_split][np.argmin(scores[can_split])]
-
-      # TODO: delay the idx calculation to the end?
-      best_split = Split(col, best_val, idx[vals <= best_val], idx[vals > best_val])
-
+      best_split = Split(col, best_val)
 
   if best_split is None:
     # couldn't decrease impurity by splitting
