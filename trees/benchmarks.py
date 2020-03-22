@@ -206,19 +206,19 @@ if __name__ == '__main__':
   ]
 
   xgboost_args = [
-    {'n_estimators': 1, 'tree_method': 'exact'},
-    {'n_estimators': 1, 'tree_method': 'approx'},
-    {'n_estimators': 1, 'tree_method': 'hist'},
-    {'n_estimators': 1, 'tree_method': 'hist'},
-    {'n_estimators': 1, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
   ]
 
   tree_params = [
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
   ]
 
   for b, name in enumerate(benchmark_names):

@@ -79,7 +79,6 @@ def apply_bucket_splits(
   return bucketed
 
 
-MAX_DEPTH = 6
 def fit(
     X: np.ndarray, 
     y: np.ndarray, 
@@ -94,14 +93,18 @@ def fit(
 
   float_targets = (y.dtype != np.bool)
 
-  eta = 1.0
-  mean = np.mean(y)
-  loss_gradient = mean - y
-  target = - eta * loss_gradient
+  preds = np.mean(y)
 
-  tree = fit_tree(X, target, params)
+  trees = []
+  for t in range(params.tree_count):
+    loss_gradient = preds - y
+    target = -params.learning_rate * loss_gradient
 
-  return Model([tree], bucket_splits, float_targets, mean)
+    tree, new_preds = fit_tree(X, target, params)
+    trees.append(tree)
+    preds += new_preds
+
+  return Model(trees, bucket_splits, float_targets, np.mean(y))
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import numpy as np
 
@@ -48,7 +48,7 @@ def fit_tree(
     X: np.ndarray, 
     y: np.ndarray,
     params: Params
-) -> Tree:
+) -> Tuple[Tree, np.ndarray]:
   assert X.dtype == np.uint8
   assert X.ndim == 2
   assert y.ndim == 1
@@ -59,21 +59,27 @@ def fit_tree(
   open_nodes = [root]
   all_nodes = [root]
 
+  preds = np.zeros_like(y)
+  pred_count = np.zeros(len(preds), dtype=int) # TODO remove
+
   while len(open_nodes) > 0:
     node = open_nodes.pop()
 
     if node.depth == params.max_depth or (split := choose_split(node.idx, X, y, params)) is None:
       # leaf
-      # TODO: also update predictions for this tree here
       node.value = np.mean(y[node.idx])
+      preds[node.idx] = node.value
+      pred_count[node.idx] += 1
     else:
-      # not a leaf
+      # not leaf
       node.split = split
       node.left_child = Node(split.left_idx, node.depth + 1)
       node.right_child = Node(split.right_idx, node.depth + 1)
       open_nodes += [node.left_child, node.right_child]
       all_nodes += [node.left_child, node.right_child]
-  return Tree(root, all_nodes)
+
+  assert np.all(pred_count == 1)
+  return Tree(root, all_nodes), preds
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
