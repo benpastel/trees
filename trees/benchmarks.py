@@ -5,7 +5,7 @@ import xgboost as xgb
 from sklearn.datasets import load_svmlight_file
 
 from trees.utils import timed, binary_stats, regression_stats
-from trees.model import fit, predict
+from trees.model import fit, predict, Params
 
 
 def print_stats(
@@ -213,12 +213,12 @@ if __name__ == '__main__':
     {'n_estimators': 1, 'tree_method': 'hist'},
   ]
 
-  tree_args = [
-    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
-    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
-    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
-    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
-    {'min_leaf_size': 10, 'max_depth': 6, 'extra_leaf_penalty': 0.0},
+  tree_params = [
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0),
   ]
 
   for b, name in enumerate(benchmark_names):
@@ -248,8 +248,8 @@ if __name__ == '__main__':
 
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
 
-    with timed(f'train & predict our tree with {tree_args[b]}...'):
-      model = fit(train_X, train_y, **tree_args[b])
+    with timed(f'train & predict our tree with {tree_params[b]}...'):
+      model = fit(train_X, train_y, tree_params[b])
       print(model.__str__(verbose=False))
 
       train_preds = predict(model, train_X)

@@ -3,7 +3,19 @@ from typing import Optional
 
 import numpy as np
 
-from trees.bool_splits import Split
+from trees.params import Params
+
+@dataclass 
+class Split:
+  column: int
+  value: float
+  left_idx: np.ndarray
+  right_idx: np.ndarray
+
+  def __str__(self):
+    return (f'col: {self.column}, val: {self.value}, ' 
+      + f'left_count: {len(self.left_idx)}, '
+      + f'right_count: {len(self.right_idx)}')
 
 
 def variance(A: np.ndarray):
@@ -11,25 +23,24 @@ def variance(A: np.ndarray):
   return np.mean(A * A) - (mean * mean)
 
 
-def choose_float_split(
+def choose_split(
     idx: np.ndarray,
     X: np.ndarray, 
-    y: np.ndarray, 
-    min_leaf_size: int,
-    extra_leaf_penalty: float
+    y: np.ndarray,
+    params: Params
 ) -> Optional[Split]:
   assert idx.dtype == np.intp
   assert idx.ndim == 1
   assert X.dtype == np.uint8
 
-  if len(idx) < min_leaf_size * 2:
+  if len(idx) < params.min_leaf_size * 2:
     # we need at least MIN_LEAF_SIZE points in both left child and right child
     return None
 
   min_impurity = variance(y[idx])
   best_split = None
 
-  if min_impurity <= extra_leaf_penalty:
+  if min_impurity <= params.extra_leaf_penalty:
     # already perfect
     return None
 
@@ -66,7 +77,7 @@ def choose_float_split(
     left_var = left_mean_sqs - (left_means * left_means) 
     right_var = right_mean_sqs - (right_means * right_means)
 
-    scores = (left_var * left_totals + right_var * right_totals) / (2.0 * len(vals)) + extra_leaf_penalty
+    scores = (left_var * left_totals + right_var * right_totals) / (2.0 * len(vals)) + params.extra_leaf_penalty
 
     # for left-inclusive splits, a valid place to split is one value before
     # the first time we see a unique value in the sorted array
@@ -83,8 +94,8 @@ def choose_float_split(
     # TODO could use min_leaf_size start/stop offsets instead
     can_split = np.zeros(len(asc_y), dtype=bool)
     can_split[split_idx] = True
-    can_split &= (left_totals >= min_leaf_size)
-    can_split &= (right_totals >= min_leaf_size)
+    can_split &= (left_totals >= params.min_leaf_size)
+    can_split &= (right_totals >= params.min_leaf_size)
     if not np.any(can_split):
       continue
 

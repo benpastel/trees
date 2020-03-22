@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 import numpy as np
+from trees.params import Params
 from trees.tree import Tree, fit_tree, eval_tree
 
 
@@ -82,9 +83,7 @@ MAX_DEPTH = 6
 def fit(
     X: np.ndarray, 
     y: np.ndarray, 
-    min_leaf_size: int, 
-    extra_leaf_penalty: float,
-    max_depth: int
+    params: Params
 ) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
@@ -100,7 +99,7 @@ def fit(
   loss_gradient = mean - y
   target = - eta * loss_gradient
 
-  tree = fit_tree(X, target, min_leaf_size, extra_leaf_penalty, max_depth)
+  tree = fit_tree(X, target, params)
 
   return Model([tree], bucket_splits, float_targets, mean)
 

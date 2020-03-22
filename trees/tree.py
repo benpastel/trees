@@ -3,8 +3,8 @@ from typing import Optional, List
 
 import numpy as np
 
-from trees.bool_splits import Split
-from trees.float_splits import choose_float_split
+from trees.params import Params
+from trees.splits import Split, choose_split
 
 
 class Node:  
@@ -47,9 +47,7 @@ class Tree:
 def fit_tree(
     X: np.ndarray, 
     y: np.ndarray,
-    min_leaf_size: int, 
-    extra_leaf_penalty: float,
-    max_depth: int
+    params: Params
 ) -> Tree:
   assert X.dtype == np.uint8
   assert X.ndim == 2
@@ -64,7 +62,7 @@ def fit_tree(
   while len(open_nodes) > 0:
     node = open_nodes.pop()
 
-    if node.depth == max_depth or (split := choose_float_split(node.idx, X, y, min_leaf_size, extra_leaf_penalty)) is None:
+    if node.depth == params.max_depth or (split := choose_split(node.idx, X, y, params)) is None:
       # leaf
       # TODO: also update predictions for this tree here
       node.value = np.mean(y[node.idx])
