@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from trees.tree import choose_bucket_splits, apply_bucket_splits
+from trees.model import choose_bucket_splits, apply_bucket_splits
 
 def test_choose_bucket_splits():
   X = np.array([

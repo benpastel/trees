@@ -5,7 +5,7 @@ import xgboost as xgb
 from sklearn.datasets import load_svmlight_file
 
 from trees.utils import timed, binary_stats, regression_stats
-from trees.tree import fit, predict
+from trees.model import fit, predict
 
 
 def print_stats(
@@ -250,7 +250,7 @@ if __name__ == '__main__':
 
     with timed(f'train & predict our tree with {tree_args[b]}...'):
       model = fit(train_X, train_y, **tree_args[b])
-      print(model.__str__(verbose=True))
+      print(model.__str__(verbose=False))
 
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
