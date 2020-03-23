@@ -5,7 +5,7 @@ import numpy as np
 
 from trees.params import Params
 
-@dataclass 
+@dataclass
 class Split:
   column: int
   value: int
@@ -17,7 +17,7 @@ def variance(A: np.ndarray):
 
 
 def choose_split(
-    X: np.ndarray, 
+    X: np.ndarray,
     y: np.ndarray,
     params: Params
 ) -> Optional[Split]:
@@ -28,77 +28,81 @@ def choose_split(
     # we need at least min_leaf_size rows in both left child and right child
     return None
 
-  min_impurity = variance(y)
+  orig_impurity = variance(y)
   best_split = None
 
-  if min_impurity <= params.extra_leaf_penalty:
+  if orig_impurity <= params.extra_leaf_penalty:
     # cannot be improved by splitting
     return None
 
-  for col in range(X.shape[1]):
-    vals = X[:, col]
+  # precalculate stats for each (feature, unique X value)
+  counts = np.zeros((X.shape[1], 256), dtype=np.uint32)
+  sums = np.zeros((X.shape[1], 256), dtype=np.float64)
+  sum_sqs = np.zeros((X.shape[1], 256), dtype=np.float64)
 
-    # aggregate statistics on each unique X value
-    counts = np.bincount(vals)
-    sums = np.bincount(vals, weights=y)
-    sum_sqs = np.bincount(vals, weights=(y * y))
+  for f in range(X.shape[1]):
+    vals = X[:, f]
+    counts[f] = np.bincount(vals, minlength=256)
+    sums[f] = np.bincount(vals, weights=y, minlength=256)
+    sum_sqs[f] = np.bincount(vals, weights=(y * y), minlength=256)
 
-    # choose the splitting value  
-    # 
-    # all of the vectorized ops are over the unique X values
-    # 
-    # left side is inclusive and right side is exclusive
-    # so for leftward stats, drop the last item
-    # for rightward stats, drop the first item
-    # 
-    # e.g.:
-    # 
-    #       counts = [2, 0, 1, 3]
-    #  left_counts = [2, 2, 3]       
-    # right_counts = [4, 4, 3]
-    # 
-    left_counts = np.cumsum(counts[:-1])
-    right_counts = np.cumsum(counts[-1:0:-1])[::-1]
+  # choose the splitting value
+  #
+  # all of the vectorized ops are computed across the unique X values
+  #
+  # left side is inclusive and right side is exclusive
+  # so for leftward cumulative stats, drop the last item
+  # for rightward cumulative stats, drop the first item
+  #
+  # e.g. with only 1 feature:
+  #
+  #       counts = [[2, 0, 1, 3]]
+  #  left_counts = [[2, 2, 3]]
+  # right_counts = [[4, 4, 3]]
+  #
+  def left(A):
+    return np.cumsum(A[:, :-1], axis=1)
 
-    # only consider a value for splitting if:
-    #   a training row has that value
-    #   both sides of the split are large enough
-    # 
-    # this also prevents division by 0 in the variance calculations
-    ok = (counts[:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
-    if not np.any(ok):
-      continue
-    left_counts = left_counts[ok]
-    right_counts = right_counts[ok]
+  def right(A):
+    return np.cumsum(A[:, -1:0:-1], axis=1)[:, ::-1]
 
-    left_sums = np.cumsum(sums[:-1][ok])
-    left_sum_sqs = np.cumsum(sum_sqs[:-1][ok])
-    left_means = left_sums / left_counts
-    left_mean_sqs = left_sum_sqs / left_counts
-    left_var = left_mean_sqs - (left_means * left_means) 
+  left_counts = left(counts)
+  right_counts = right(counts)
 
-    right_sums = np.cumsum(sums[-1:0:-1])[::-1][ok]
-    right_sum_sqs = np.cumsum(sum_sqs[-1:0:-1])[::-1][ok]
-    right_means = right_sums / right_counts
-    right_mean_sqs = right_sum_sqs / right_counts
-    right_var = right_mean_sqs - (right_means * right_means)
+  # only consider a value for splitting if:
+  #   a training row has that value
+  #   both sides of the split are large enough
+  #
+  # this also prevents division by 0 in the variance calculations
+  ok = (counts[:,:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
+  if not np.any(ok):
+    return None
 
-    scores = (left_var * left_counts + right_var * right_counts) / (2.0 * len(vals)) + params.extra_leaf_penalty
+  # prevent dividing by 0
+  # these scores will filtered by `ok` so they don't matter
+  left_counts[left_counts == 0] = 1
+  right_counts[right_counts == 0] = 1
 
-    impurity = np.min(scores)
+  left_means = left(sums) / left_counts
+  right_means = right(sums) / right_counts
 
-    assert impurity >= -0.0000001, f'overflow?'
+  left_var = left(sum_sqs) / left_counts - (left_means * left_means)
+  right_var = right(sum_sqs) / right_counts - (right_means * right_means)
 
-    if impurity < min_impurity:
-      min_impurity = impurity
+  # weighted average of the variances.  TODO tweak
+  scores = (left_var * left_counts + right_var * right_counts) / (2.0 * X.shape[0]) + params.extra_leaf_penalty
 
-      # scores corresponds to uniq_values[ok]
-      uniq_vals = np.arange(len(counts) - 1)
-      best_val = uniq_vals[ok][np.argmin(scores)]
-      best_split = Split(col, best_val)
+  # we can't filter by ok because it destroys the shape
+  # so just set the scores too large to be used
+  scores[~ok] = orig_impurity
 
-  if best_split is None:
+  best_col, best_val = np.unravel_index(np.argmin(scores), scores.shape)
+
+  assert scores[best_col, best_val] > -0.000000001, 'score should be positive, except rounding error'
+
+  if scores[best_col, best_val] < orig_impurity:
+    return Split(best_col, best_val)
+  else:
     # couldn't decrease impurity by splitting
     return None
 
-  return best_split

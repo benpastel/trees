@@ -15,7 +15,7 @@ class Model:
 
   def __str__(self, verbose = False):
     model_type = "Regression" if self.float_targets else "Classification"
-    s = f'{model_type} model with mean {self.mean}, {len(self.trees)} trees'
+    s = f'{model_type} model with {len(self.trees)} trees'
     if verbose:
       s += ':\n'
       s += '\n'.join(str(t) for t in self.trees)
@@ -24,13 +24,13 @@ class Model:
 
 BUCKET_COUNT = 256 # uint8 buckets
 def choose_bucket_splits(
-    X: np.ndarray, 
+    X: np.ndarray,
     bucket_count=BUCKET_COUNT
 ) -> List[np.ndarray]:
   # returns a list of bins for each column
   # where bins is an array of right inclusive endpoints:
   #   (values in bucket 0) <= bins[0] < (values in bucket 1) <= bins[1] ...
-  # 
+  #
   # so that np.searchsorted(bins, vals) returns the buckets
   splits: List[np.ndarray] = []
 
@@ -46,9 +46,9 @@ def choose_bucket_splits(
       bins = np.zeros(bucket_count, uniqs.dtype)
       for s in range(bucket_count):
         # average step by len(uniqs) // bucket_count
-        # 
-        # right endpoint is inclusive, so -1 
-        # 
+        #
+        # right endpoint is inclusive, so -1
+        #
         # so start with (s + 1) * (len(uniqs)) // bucket_count) - 1
         # but then divide by bucket count last so that the extras a distributed evenly
         idx = ((s+1) * len(uniqs)) // bucket_count - 1
@@ -69,7 +69,7 @@ def apply_bucket_splits(
   for col, bins in enumerate(splits):
 
     # TODO: decide how to handle different dtypes
-    assert X.dtype == bins.dtype 
+    assert X.dtype == bins.dtype
     indices = np.searchsorted(bins, X[:, col])
 
     # in the training case, indices should always be < len(buckets)
@@ -80,8 +80,8 @@ def apply_bucket_splits(
 
 
 def fit(
-    X: np.ndarray, 
-    y: np.ndarray, 
+    X: np.ndarray,
+    y: np.ndarray,
     params: Params
 ) -> Model:
   assert X.ndim == 2

@@ -7,7 +7,7 @@ from trees.params import Params
 from trees.splits import Split, choose_split
 
 
-class Node:  
+class Node:
   # indices in the input data contained in this node
   def __init__(self, depth: int, count: int):
     self.depth = depth
@@ -19,7 +19,7 @@ class Node:
     self.right_child: Optional['Node'] = None
 
     # non-none for leaves
-    self.value: Optional[float] = None 
+    self.value: Optional[float] = None
 
   def __str__(self, level = 0):
     ''' recursively print the tree '''
@@ -45,14 +45,14 @@ class Tree:
 
 
 def fit_tree(
-    X: np.ndarray, 
+    X: np.ndarray,
     y: np.ndarray,
     params: Params
 ) -> Tuple[Tree, np.ndarray]:
   assert X.dtype == np.uint8
   assert X.ndim == 2
   assert y.ndim == 1
-  assert y.shape == (X.shape[0],) 
+  assert y.shape == (X.shape[0],)
 
   all_indices = np.arange(X.shape[0], dtype=np.intp)
   root = Node(depth=1, count=X.shape[0])
@@ -84,7 +84,7 @@ def fit_tree(
       right_idx = idx[X_in_node[:, split.column] > split.value]
       node.left_child = Node(node.depth + 1, len(left_idx))
       node.right_child = Node(node.depth + 1, len(right_idx))
-      
+
       all_nodes += [node.left_child, node.right_child]
       open_nodes += [node.left_child, node.right_child]
       open_indices += [left_idx, right_idx]

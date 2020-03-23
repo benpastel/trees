@@ -9,7 +9,7 @@ from trees.model import fit, predict, Params
 
 
 def print_stats(
-    train_preds, train_trues, 
+    train_preds, train_trues,
     valid_preds, valid_trues,
     is_regression):
   if is_regression:
@@ -63,16 +63,16 @@ def load_house_prices():
       X[:, c] = inverse
     else:
       X[:, c] = contents.values
-    
+
     c += 1
-  assert c == 79  
+  assert c == 79
   X[np.isnan(X)] = -1
   return X, y
 
 
 def load_credit():
   frame = pd.read_csv('data/credit/application_train.csv')
-  y = frame['TARGET'].values.astype(np.bool) 
+  y = frame['TARGET'].values.astype(np.bool)
 
   # for now we just take the numeric data
   X = np.zeros((len(frame), 104))
@@ -130,7 +130,7 @@ def load_m5():
     y = sales[:, 365:].flatten()
 
     # start with a very simple timeseries prediction setup
-    # 
+    #
     # skip the first 365 days, then predict each day based on:
     #   the previous day
     #   the previous 7 days
@@ -142,7 +142,7 @@ def load_m5():
     # this axes order is efficient for writing
     # approximate with uint16 for efficiency
     # scale floats before the uint18 truncation:
-    # 
+    #
     #   np.max(sales) == 763 so 80 is a safe scale for mean
     #   np.std is harder to predict, so use 10 to be more cautious
     feats = 14
@@ -190,10 +190,10 @@ def load_m5():
 
 if __name__ == '__main__':
   benchmark_names = [
-    'Agaricus', 
+    'Agaricus',
     'House Prices',
-    'Home Credit Default Risk', 
-    'Santander Value', 
+    'Home Credit Default Risk',
+    'Santander Value',
     'M5'
   ]
 
@@ -206,11 +206,11 @@ if __name__ == '__main__':
   ]
 
   xgboost_args = [
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'exact'},
+    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'approx'},
+    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
   ]
 
   tree_params = [
