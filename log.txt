@@ -2,88 +2,84 @@ Agaricus:
 
 X.shape: train (5211, 126), valid (1302, 126)
 binary classification with 3140 true and 3373 false
-train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'}...
+train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'exact'}...
 (0.2s)
 
-      train preds bincount: [2701 2510]
+      train preds bincount: [2673 2538]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
-    
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
-/Users/benji/dev/trees/trees/splits.py:63: RuntimeWarning: invalid value encountered in true_divide
-  left_means = left_sums / left_counts
-/Users/benji/dev/trees/trees/splits.py:64: RuntimeWarning: invalid value encountered in true_divide
-  left_mean_sqs = left_sum_sqs / left_counts
-Classification model with mean 0.48167338322778736, 10 trees
-(1.2s)
 
-      train preds bincount: [2701 2510]
+train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+Classification model with 10 trees
+(0.6s)
+
+      train preds bincount: [2673 2538]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
-    
+
 
 
 House Prices:
 
 X.shape: train (1168, 79), valid (292, 79)
 regression targets with min=34900.0, max=755000.0, mean=180921.2
-train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'}...
+train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'approx'}...
 (0.1s)
 
-      train preds: min=39202.4, max=654968.9, mean=173483.4
-      train: log(MSE): 19.1, MAE: 9888.2
-      valid: log(MSE): 20.9, MAE: 20345.3
-    
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
-Regression model with mean 179366.7234589041, 10 trees
-(0.9s)
+      train preds: min=37369.4, max=600783.9, mean=173649.6
+      train: log(MSE): 19.2, MAE: 10201.7
+      valid: log(MSE): 20.7, MAE: 19221.1
 
-      train preds: min=54241.7, max=572805.1, mean=179366.7
-      train: log(MSE): 19.6, MAE: 11699.1
-      valid: log(MSE): 20.9, MAE: 19488.1
-    
+train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+Regression model with 10 trees
+(0.2s)
+
+      train preds: min=54959.9, max=562845.1, mean=179537.6
+      train: log(MSE): 19.6, MAE: 11928.9
+      valid: log(MSE): 20.6, MAE: 17352.5
+
 
 
 Home Credit Default Risk:
 
 X.shape: train (246009, 104), valid (61502, 104)
 binary classification with 24825 true and 282686 false
-train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
-(3.6s)
+train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'}...
+(3.5s)
 
-      train preds bincount: [245974     35]
-      train: accuracy = 91.94%, precision = 85.71%, recall = 0.15%
-      valid: accuracy = 91.94%, precision = 61.54%, recall = 0.16%
-    
+      train preds bincount: [245997     12]
+      train: accuracy = 91.98%, precision = 100.00%, recall = 0.06%
+      valid: accuracy = 91.75%, precision = 100.00%, recall = 0.06%
+
 train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
-Classification model with mean 0.08074094850188408, 10 trees
-(33.5s)
+Classification model with 10 trees
+(15.0s)
 
-      train preds bincount: [245991     18]
-      train: accuracy = 91.93%, precision = 77.78%, recall = 0.07%
-      valid: accuracy = 91.94%, precision = 71.43%, recall = 0.10%
-    
+      train preds bincount: [246007      2]
+      train: accuracy = 91.97%, precision = 100.00%, recall = 0.01%
+      valid: accuracy = 91.74%, precision = 0.00%, recall = 0.00%
+
 
 
 Santander Value:
 
 X.shape: train (3568, 4991), valid (891, 4991)
 regression targets with min=30000.0, max=40000000.0, mean=5944923.3
-train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
+train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'}...
 (4.5s)
 
-      train preds: min=658847.5, max=36089684.0, mean=5748775.0
-      train: log(MSE): 31.2, MAE: 4098751.4
-      valid: log(MSE): 31.6, MAE: 5097297.9
-    
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
-Regression model with mean 5955160.665683857, 10 trees
-(53.7s)
+      train preds: min=976273.8, max=37263736.0, mean=5768380.5
+      train: log(MSE): 31.1, MAE: 3968414.3
+      valid: log(MSE): 31.6, MAE: 4955381.8
 
-      train preds: min=1452254.1, max=34680545.6, mean=5955160.7
-      train: log(MSE): 31.3, MAE: 4496916.4
-      valid: log(MSE): 31.6, MAE: 5223632.3
-    
+train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+Regression model with 10 trees
+(47.3s)
+
+      train preds: min=-128223.0, max=39732969.7, mean=5975085.7
+      train: log(MSE): 31.3, MAE: 4370630.0
+      valid: log(MSE): 31.6, MAE: 5055227.3
+
 
 
 M5:
@@ -91,17 +87,17 @@ M5:
 loading from cache
 X.shape: train (37734424, 14), valid (9433606, 14)
 regression targets with min=0.0, max=763.0, mean=1.2
-train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
-(82.9s)
+train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'}...
+(79.2s)
 
-      train preds: min=0.0, max=454.4, mean=1.2
-      train: MSE: 4.4, MAE: 0.8
-      valid: MSE: 4.7, MAE: 0.8
-    
+      train preds: min=0.0, max=563.8, mean=1.2
+      train: MSE: 4.5, MAE: 0.8
+      valid: MSE: 4.3, MAE: 0.8
+
 train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
-Regression model with mean 1.18680483899794, 10 trees
-(523.2s)
+Regression model with 10 trees
+(260.9s)
 
-      train preds: min=0.0, max=462.4, mean=1.2
+      train preds: min=0.1, max=496.9, mean=1.2
       train: MSE: 4.5, MAE: 0.9
-      valid: MSE: 4.7, MAE: 0.9
+      valid: MSE: 4.4, MAE: 0.9

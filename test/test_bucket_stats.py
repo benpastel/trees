@@ -27,4 +27,4 @@ def test_bucket_stats():
 
   assert_array_almost_equal(sum_sqs[0, 0:4], [1.0, 1.0, 100.0,   0.0])
   assert_array_almost_equal(sum_sqs[1, 0:4], [0.0, 0.0,   0.0, 102.0])
-  assert np.all(sum_sqs[:, 4:] == 0.0)
+  assert np.all(sum_sqs[:, 4:] == 0)

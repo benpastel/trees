@@ -1,9 +1,10 @@
-.PHONY:build
 build:
-	-rm trees/c/bucket_stats.cpython-38-darwin.so
+	-rm trees/c/bucket_stats.cpython-38-darwin.son # TODO make properly
 	cd trees/c && python setup.py build_ext --inplace
-	python -m trees.c.test_bucket_stats
 
-run:
+test: build
+	python -m pytest
+
+run: test
 	python -m pytest
 	python -m trees.benchmarks

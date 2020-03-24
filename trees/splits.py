@@ -4,6 +4,7 @@ from typing import Optional
 import numpy as np
 
 from trees.params import Params
+from trees.c.bucket_stats import bucket_stats
 
 @dataclass
 class Split:
@@ -39,12 +40,7 @@ def choose_split(
   counts = np.zeros((X.shape[1], 256), dtype=np.uint32)
   sums = np.zeros((X.shape[1], 256), dtype=np.float64)
   sum_sqs = np.zeros((X.shape[1], 256), dtype=np.float64)
-
-  for f in range(X.shape[1]):
-    vals = X[:, f]
-    counts[f] = np.bincount(vals, minlength=256)
-    sums[f] = np.bincount(vals, weights=y, minlength=256)
-    sum_sqs[f] = np.bincount(vals, weights=(y * y), minlength=256)
+  bucket_stats(X, y, counts, sums, sum_sqs)
 
   # choose the splitting value
   #
