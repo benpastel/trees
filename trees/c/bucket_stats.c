@@ -59,9 +59,9 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             npy_uint8 val = X_ptr[r][c];
-            count_ptr[c][val] = count_ptr[c][val] + 1;
-            sum_ptr[c][val] = sum_ptr[c][val] + y_ptr[r];
-            sum_sqs_ptr[c][val] = sum_sqs_ptr[c][val] + (y_ptr[r] * y_ptr[r]);
+            count_ptr[c][val]++;
+            sum_ptr[c][val] += y_ptr[r];
+            sum_sqs_ptr[c][val] += y_ptr[r] * y_ptr[r];
         }
     }
     PyArray_Free(X, X_ptr);
