@@ -15,8 +15,6 @@ static PyMethodDef Methods[] = {
 static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg=NULL, *y_arg=NULL, *count_arg=NULL, *sum_arg=NULL, *sum_sqs_arg=NULL;
-    PyObject *X=NULL, *y=NULL, *count_out=NULL, *sum_out=NULL, *sum_sqs_out=NULL;
-
     if (!PyArg_ParseTuple(args, "O!O!O!O!O!",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
@@ -24,16 +22,20 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
         &PyArray_Type, &sum_arg,
         &PyArray_Type, &sum_sqs_arg)) return NULL;
 
-    X = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    if (X == NULL) return NULL;
-    y = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-    if (y == NULL) goto fail;
-    count_out = PyArray_FROM_OTF(count_arg, NPY_UINT32, NPY_ARRAY_INOUT_ARRAY2);
-    if (count_out == NULL) goto fail;
-    sum_out = PyArray_FROM_OTF(sum_arg, NPY_DOUBLE, NPY_ARRAY_INOUT_ARRAY2);
-    if (sum_out == NULL) goto fail;
-    sum_sqs_out = PyArray_FROM_OTF(sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_INOUT_ARRAY2);
-    if (sum_sqs_out == NULL) goto fail;
+    PyObject *X = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *y = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyObject *count_out = PyArray_FROM_OTF(count_arg, NPY_UINT32, NPY_ARRAY_OUT_ARRAY);
+    PyObject *sum_out = PyArray_FROM_OTF(sum_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+    PyObject *sum_sqs_out = PyArray_FROM_OTF(sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+    if (X == NULL || y == NULL || count_out == NULL || sum_out == NULL || sum_sqs_out == NULL) {
+        Py_XDECREF(X);
+        Py_XDECREF(y);
+        Py_XDECREF(count_out);
+        Py_XDECREF(sum_out);
+        Py_XDECREF(sum_sqs_out);
+        return NULL;
+    }
+
 
     npy_intp X_dims[2];
     npy_intp y_dims[1];
@@ -54,7 +56,6 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
 
     int rows = (int) X_dims[0];
     int cols = (int) X_dims[1];
-
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             npy_uint8 val = X_ptr[r][c];
@@ -63,20 +64,18 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
             sum_sqs_ptr[c][val] = sum_sqs_ptr[c][val] + (y_ptr[r] * y_ptr[r]);
         }
     }
-
+    PyArray_Free(X, X_ptr);
+    PyArray_Free(y, y_ptr);
+    PyArray_Free(count_out, count_ptr);
+    PyArray_Free(sum_out, sum_ptr);
+    PyArray_Free(sum_sqs_out, sum_sqs_ptr);
     Py_DECREF(X);
     Py_DECREF(y);
-    PyArray_ResolveWritebackIfCopy((PyArrayObject *) count_out);
     Py_DECREF(count_out);
+    Py_DECREF(sum_out);
+    Py_DECREF(sum_sqs_out);
     Py_INCREF(Py_None);
     return Py_None;
-
- fail:
-    Py_XDECREF(X);
-    Py_XDECREF(y);
-    PyArray_DiscardWritebackIfCopy((PyArrayObject *) count_out);
-    Py_XDECREF(count_out);
-    return NULL;
 }
 
 static struct PyModuleDef mod_def =
