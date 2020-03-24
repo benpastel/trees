@@ -2,4 +2,6 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 data/
+trees/c/build/
+trees/c/*.so
 .DS_Store
