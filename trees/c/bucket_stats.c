@@ -45,11 +45,13 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
     int cols = (int) PyArray_DIM((PyArrayObject *) X, 1);
     int vals = (int) PyArray_DIM((PyArrayObject *) count_out, 1);
     for (int r = 0; r < rows; r++) {
+        npy_float64 y_val = y_ptr[r];
+        npy_float64 y_square = y_val * y_val;
         for (int c = 0; c < cols; c++) {
             int idx = c * vals + X_ptr[r * cols + c];
             count_ptr[idx]++;
-            sum_ptr[idx] += y_ptr[r];
-            sum_sqs_ptr[idx] += y_ptr[r] * y_ptr[r];
+            sum_ptr[idx] += y_val;
+            sum_sqs_ptr[idx] += y_square;
         }
     }
     Py_DECREF(X);
