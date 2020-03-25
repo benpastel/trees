@@ -35,40 +35,23 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
         Py_XDECREF(sum_sqs_out);
         return NULL;
     }
+    npy_uint8 *X_ptr = (npy_uint8 *) PyArray_DATA((PyArrayObject *) X);
+    npy_float64 *y_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) y);
+    npy_uint32 *count_ptr = (npy_uint32 *) PyArray_DATA((PyArrayObject *) count_out);
+    npy_float64 *sum_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) sum_out);
+    npy_float64 *sum_sqs_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) sum_sqs_out);
 
-
-    npy_intp X_dims[2];
-    npy_intp y_dims[1];
-    npy_intp count_dims[2];
-    npy_intp sum_dims[2];
-    npy_intp sum_sqs_dims[2];
-
-    npy_uint8 **X_ptr;
-    npy_float64 *y_ptr;
-    npy_uint32 **count_ptr;
-    npy_float64 **sum_ptr;
-    npy_float64 **sum_sqs_ptr;
-    PyArray_AsCArray(&X, &X_ptr, X_dims, 2, PyArray_DescrFromType(NPY_UINT8));
-    PyArray_AsCArray(&y, &y_ptr, y_dims, 1, PyArray_DescrFromType(NPY_FLOAT64));
-    PyArray_AsCArray(&count_out, &count_ptr, count_dims, 2, PyArray_DescrFromType(NPY_UINT32));
-    PyArray_AsCArray(&sum_out, &sum_ptr, sum_dims, 2, PyArray_DescrFromType(NPY_FLOAT64));
-    PyArray_AsCArray(&sum_sqs_out, &sum_sqs_ptr, sum_sqs_dims, 2, PyArray_DescrFromType(NPY_FLOAT64));
-
-    int rows = (int) X_dims[0];
-    int cols = (int) X_dims[1];
+    int rows = (int) PyArray_DIM((PyArrayObject *) X, 0);
+    int cols = (int) PyArray_DIM((PyArrayObject *) X, 1);
+    int vals = (int) PyArray_DIM((PyArrayObject *) count_out, 1);
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
-            npy_uint8 val = X_ptr[r][c];
-            count_ptr[c][val]++;
-            sum_ptr[c][val] += y_ptr[r];
-            sum_sqs_ptr[c][val] += y_ptr[r] * y_ptr[r];
+            int idx = c * vals + X_ptr[r * cols + c];
+            count_ptr[idx]++;
+            sum_ptr[idx] += y_ptr[r];
+            sum_sqs_ptr[idx] += y_ptr[r] * y_ptr[r];
         }
     }
-    PyArray_Free(X, X_ptr);
-    PyArray_Free(y, y_ptr);
-    PyArray_Free(count_out, count_ptr);
-    PyArray_Free(sum_out, sum_ptr);
-    PyArray_Free(sum_sqs_out, sum_sqs_ptr);
     Py_DECREF(X);
     Py_DECREF(y);
     Py_DECREF(count_out);

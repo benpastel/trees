@@ -15,6 +15,12 @@ def test_bucket_stats():
   sums = np.zeros((X.shape[1], 256))
   sum_sqs = np.zeros((X.shape[1], 256))
 
+  assert(X.strides[-1] == X.itemsize)
+  assert(y.strides[-1] == y.itemsize)
+  assert(counts.strides[-1] == counts.itemsize)
+  assert(sums.strides[-1] == sums.itemsize)
+  assert(sum_sqs.strides[-1] == sum_sqs.itemsize)
+
   bucket_stats(X, y, counts, sums, sum_sqs)
 
   assert_array_equal(counts[0, 0:4], [1, 1, 1, 0])
