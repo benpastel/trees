@@ -4,7 +4,7 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.datasets import load_svmlight_file
 
-from trees.utils import timed, binary_stats, regression_stats
+from trees.utils import timed, profiled, binary_stats, regression_stats
 from trees.model import fit, predict, Params
 
 
@@ -206,11 +206,11 @@ if __name__ == '__main__':
   ]
 
   xgboost_args = [
-    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'exact'},
-    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'approx'},
-    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'n_jobs': 8, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
   ]
 
   tree_params = [
@@ -245,15 +245,14 @@ if __name__ == '__main__':
       model.fit(train_X, train_y)
       train_preds = model.predict(train_X)
       valid_preds = model.predict(valid_X)
-
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
 
     with timed(f'train & predict our tree with {tree_params[b]}...'):
+    # with profiled():
       model = fit(train_X, train_y, tree_params[b])
       print(model.__str__(verbose=False))
 
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
-
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
 

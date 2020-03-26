@@ -37,6 +37,8 @@ def choose_split(
     return None
 
   # precalculate stats for each (feature, unique X value)
+  # TODO try record array?
+  # TODO wrap bucket_stats in function that asserts memory preconditions
   counts = np.zeros((X.shape[1], 256), dtype=np.uint32)
   sums = np.zeros((X.shape[1], 256), dtype=np.float64)
   sum_sqs = np.zeros((X.shape[1], 256), dtype=np.float64)
@@ -94,7 +96,7 @@ def choose_split(
 
   best_col, best_val = np.unravel_index(np.argmin(scores), scores.shape)
 
-  assert scores[best_col, best_val] > -0.000000001, 'score should be positive, except rounding error'
+  assert scores[best_col, best_val] > -0.000000001, f'score {scores[best_col, best_val]} should be positive, except rounding error'
 
   if scores[best_col, best_val] < orig_impurity:
     return Split(best_col, best_val)

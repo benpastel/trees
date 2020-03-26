@@ -1,7 +1,7 @@
-#include "Python.h"
-#include "math.h"
+#include <Python.h>
+#include <math.h>
 #define NPY_NO_DEPRECATED_API NPY_API_VERSION
-#include "arrayobject.h"
+#include <arrayobject.h>
 
 static PyObject* bucket_stats(PyObject *self, PyObject *args);
 
@@ -35,25 +35,28 @@ static PyObject* bucket_stats(PyObject *dummy, PyObject *args)
         Py_XDECREF(sum_sqs_out);
         return NULL;
     }
-    npy_uint8 *X_ptr = (npy_uint8 *) PyArray_DATA((PyArrayObject *) X);
-    npy_float64 *y_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) y);
-    npy_uint32 *count_ptr = (npy_uint32 *) PyArray_DATA((PyArrayObject *) count_out);
-    npy_float64 *sum_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) sum_out);
-    npy_float64 *sum_sqs_ptr = (npy_float64 *) PyArray_DATA((PyArrayObject *) sum_sqs_out);
+    uint8_t * restrict X_ptr = (uint8_t *) PyArray_DATA((PyArrayObject *) X);
+    double * restrict y_ptr = (double *) PyArray_DATA((PyArrayObject *) y);
+    uint32_t * restrict count_ptr = (uint32_t *) PyArray_DATA((PyArrayObject *) count_out);
+    double * restrict sum_ptr = (double *) PyArray_DATA((PyArrayObject *) sum_out);
+    double * restrict sum_sqs_ptr = (double *) PyArray_DATA((PyArrayObject *) sum_sqs_out);
 
-    int rows = (int) PyArray_DIM((PyArrayObject *) X, 0);
-    int cols = (int) PyArray_DIM((PyArrayObject *) X, 1);
-    int vals = (int) PyArray_DIM((PyArrayObject *) count_out, 1);
-    for (int r = 0; r < rows; r++) {
-        npy_float64 y_val = y_ptr[r];
-        npy_float64 y_square = y_val * y_val;
-        for (int c = 0; c < cols; c++) {
+    const int rows = (int) PyArray_DIM((PyArrayObject *) X, 0);
+    const int cols = (int) PyArray_DIM((PyArrayObject *) X, 1);
+    const int vals = (int) PyArray_DIM((PyArrayObject *) count_out, 1);
+
+    // parallelize over the features
+    // so that each thread writes to distinct memory
+    #pragma omp parallel for
+    for (int c = 0; c < cols; c++) {
+        for (int r = 0; r < rows; r++) {
             int idx = c * vals + X_ptr[r * cols + c];
             count_ptr[idx]++;
-            sum_ptr[idx] += y_val;
-            sum_sqs_ptr[idx] += y_square;
+            sum_ptr[idx] += y_ptr[r];
+            sum_sqs_ptr[idx] += y_ptr[r] * y_ptr[r];
         }
     }
+
     Py_DECREF(X);
     Py_DECREF(y);
     Py_DECREF(count_out);

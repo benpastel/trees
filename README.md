@@ -2,13 +2,11 @@
 
 under construction
 
-requirements:
-`pip install -r requirements.txt`
+installation:
+(1) switch to the llvm clang installed by `brew install llvm`
+(2) `pip install -r requirements.txt`
 
-tests:
-`python -m pytest`
-
-benchmarks:
+usage:
 ```
-python -m trees.benchmarks
+make run
 ```
