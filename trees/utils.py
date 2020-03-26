@@ -2,6 +2,8 @@ from time import time
 from contextlib import contextmanager
 
 import numpy as np
+import cProfile, pstats, io
+from pstats import SortKey
 
 
 @contextmanager
@@ -11,6 +13,21 @@ def timed(msg: str):
   yield
   stop = time()
   print(f'({stop - start:.1f}s)')
+
+
+@contextmanager
+def profiled():
+  pr = cProfile.Profile()
+  pr.enable()
+  yield
+  pr.disable()
+
+  s = io.StringIO()
+  pstats.Stats(pr, stream=s).sort_stats(SortKey.CUMULATIVE).print_stats(10)
+  print(s.getvalue())
+
+  pstats.Stats(pr, stream=s).sort_stats(SortKey.TIME).print_stats(10)
+  print(s.getvalue())
 
 
 def percent(num: int, denom: int) -> str:
