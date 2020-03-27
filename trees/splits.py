@@ -4,13 +4,12 @@ from typing import Optional
 import numpy as np
 
 from trees.params import Params
-from trees.c.bucket_stats import bucket_stats
+from trees.c.split import split as c_choose_split
 
 @dataclass
 class Split:
   column: int
   value: int
-
 
 def variance(A: np.ndarray):
   mean = np.mean(A)
@@ -22,85 +21,31 @@ def choose_split(
     y: np.ndarray,
     params: Params
 ) -> Optional[Split]:
+  # check preconditions of the C function here
+  # TODO also assert X,y are well-aligned C-style or whatever
   assert X.dtype == np.uint8
-  assert y.ndim == 1
+  rows, cols = X.shape
+  assert y.shape == (rows,)
+  assert rows > 0
+  assert cols > 0
+  assert params.min_leaf_size > 0
 
-  if len(y) < params.min_leaf_size * 2:
+  if rows < params.min_leaf_size * 2:
     # we need at least min_leaf_size rows in both left child and right child
     return None
 
   orig_impurity = variance(y)
   best_split = None
 
-  if orig_impurity <= params.extra_leaf_penalty:
+  max_split_score = orig_impurity - params.extra_leaf_penalty;
+
+  if max_split_score <= 0:
     # cannot be improved by splitting
     return None
 
-  # precalculate stats for each (feature, unique X value)
-  # TODO try record array?
-  # TODO wrap bucket_stats in function that asserts memory preconditions
-  counts = np.zeros((X.shape[1], 256), dtype=np.uint32)
-  sums = np.zeros((X.shape[1], 256), dtype=np.float64)
-  sum_sqs = np.zeros((X.shape[1], 256), dtype=np.float64)
-  bucket_stats(X, y, counts, sums, sum_sqs)
+  # TODO just return the tuple
+  out = c_choose_split(X, y, max_split_score, params.min_leaf_size)
+  return None if out is None else Split(out[0], out[1])
 
-  # choose the splitting value
-  #
-  # all of the vectorized ops are computed across the unique X values
-  #
-  # left side is inclusive and right side is exclusive
-  # so for leftward cumulative stats, drop the last item
-  # for rightward cumulative stats, drop the first item
-  #
-  # e.g. with only 1 feature:
-  #
-  #       counts = [[2, 0, 1, 3]]
-  #  left_counts = [[2, 2, 3]]
-  # right_counts = [[4, 4, 3]]
-  #
-  def left(A):
-    return np.cumsum(A[:, :-1], axis=1)
 
-  def right(A):
-    return np.cumsum(A[:, -1:0:-1], axis=1)[:, ::-1]
-
-  left_counts = left(counts)
-  right_counts = right(counts)
-
-  # only consider a value for splitting if:
-  #   a training row has that value
-  #   both sides of the split are large enough
-  #
-  # this also prevents division by 0 in the variance calculations
-  ok = (counts[:,:-1] > 0) & (left_counts >= params.min_leaf_size) & (right_counts >= params.min_leaf_size)
-  if not np.any(ok):
-    return None
-
-  # prevent dividing by 0
-  # these scores will filtered by `ok` so they don't matter
-  left_counts[left_counts == 0] = 1
-  right_counts[right_counts == 0] = 1
-
-  left_means = left(sums) / left_counts
-  right_means = right(sums) / right_counts
-
-  left_var = left(sum_sqs) / left_counts - (left_means * left_means)
-  right_var = right(sum_sqs) / right_counts - (right_means * right_means)
-
-  # weighted average of the variances.  TODO tweak
-  scores = (left_var * left_counts + right_var * right_counts) / (2.0 * X.shape[0]) + params.extra_leaf_penalty
-
-  # we can't filter by ok because it destroys the shape
-  # so just set the scores too large to be used
-  scores[~ok] = orig_impurity
-
-  best_col, best_val = np.unravel_index(np.argmin(scores), scores.shape)
-
-  assert scores[best_col, best_val] > -0.000000001, f'score {scores[best_col, best_val]} should be positive, except rounding error'
-
-  if scores[best_col, best_val] < orig_impurity:
-    return Split(best_col, best_val)
-  else:
-    # couldn't decrease impurity by splitting
-    return None
 

@@ -1,5 +1,7 @@
+COMPILED_C_FILE := trees/c/split.cpython-38-darwin.so
+
 build:
-	-rm trees/c/bucket_stats.cpython-38-darwin.so # TODO make properly
+	-rm $(COMPILED_C_FILE) # TODO make properly
 	cd trees/c && python setup.py build_ext --inplace
 
 test: build
@@ -10,4 +12,4 @@ run: test
 	python -m trees.benchmarks
 
 disassemble:
-	objdump -S --disassemble trees/c/bucket_stats.cpython-38-darwin.so | subl
+	objdump -S --disassemble $(COMPILED_C_FILE) | subl

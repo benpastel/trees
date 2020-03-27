@@ -37,7 +37,7 @@ def test_choose_split():
   assert split.value == 2
 
   # same case, but at min_leaf_size = 3
-  # we're forced to take value 1 
+  # we're forced to take value 1
   split = choose_split(
     X,
     y,
@@ -54,4 +54,3 @@ def test_choose_split():
     Params(min_leaf_size=1, extra_leaf_penalty=10.0)
   )
   assert split is None
-  
