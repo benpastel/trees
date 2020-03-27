@@ -46,8 +46,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
 
     // parallelize over the features
     // so that each thread writes to distinct memory
-    // TODO: add back
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (int c = 0; c < cols; c++) {
 
         // for each unique X value, aggregate stats about y
