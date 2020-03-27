@@ -10,15 +10,13 @@ from trees.c.split import split as c_choose_split
 class Split:
   column: int
   value: int
-
-def variance(A: np.ndarray):
-  mean = np.mean(A)
-  return np.mean(A * A) - (mean * mean)
+  score: float
 
 
 def choose_split(
     X: np.ndarray,
     y: np.ndarray,
+    parent_split_score: float,
     params: Params
 ) -> Optional[Split]:
   # check preconditions of the C function here
@@ -29,23 +27,20 @@ def choose_split(
   assert rows > 0
   assert cols > 0
   assert params.min_leaf_size > 0
+  assert params.extra_leaf_penalty >= 0
 
   if rows < params.min_leaf_size * 2:
     # we need at least min_leaf_size rows in both left child and right child
     return None
 
-  orig_impurity = variance(y)
-  best_split = None
+  max_split_score = parent_split_score - params.extra_leaf_penalty
 
-  max_split_score = orig_impurity - params.extra_leaf_penalty;
-
-  if max_split_score <= 0:
-    # cannot be improved by splitting
+  out = c_choose_split(X, y, max_split_score, params.min_leaf_size)
+  if out is None:
     return None
 
-  # TODO just return the tuple
-  out = c_choose_split(X, y, max_split_score, params.min_leaf_size)
-  return None if out is None else Split(out[0], out[1])
-
+  split = Split(*out)
+  split.score += params.extra_leaf_penalty
+  return split
 
 

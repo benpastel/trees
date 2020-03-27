@@ -4,6 +4,7 @@ from trees.splits import choose_split
 from trees.params import Params
 
 
+# TODO add test case with EXACT output score
 def test_choose_split():
   # this case is perfectly split by 2nd column
   X = np.array([
@@ -16,6 +17,7 @@ def test_choose_split():
   split = choose_split(
     X,
     y,
+    100,
     Params(min_leaf_size=1, extra_leaf_penalty=0.0)
   )
   assert split is not None
@@ -30,6 +32,7 @@ def test_choose_split():
   split = choose_split(
     X,
     y,
+    np.var(y),
     Params(min_leaf_size=1, extra_leaf_penalty=0.0)
   )
   assert split is not None
@@ -41,16 +44,27 @@ def test_choose_split():
   split = choose_split(
     X,
     y,
+    np.var(y),
     Params(min_leaf_size=3, extra_leaf_penalty=0.0)
   )
   assert split is not None
   assert split.column == 0
   assert split.value == 1
 
-  # same case, but at super high extra leaf penalty we never split
+  # at super high extra leaf penalty we never split
   split = choose_split(
     X,
     y,
+    np.var(y),
     Params(min_leaf_size=1, extra_leaf_penalty=10.0)
+  )
+  assert split is None
+
+  # at super low parent score we never split
+  split = choose_split(
+    X,
+    y,
+    0.1,
+    Params(min_leaf_size=1, extra_leaf_penalty=0.0)
   )
   assert split is None

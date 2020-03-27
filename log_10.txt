@@ -5,17 +5,19 @@ binary classification with 3140 true and 3373 false
 train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'}...
 (0.1s)
 
-      train preds bincount: [2707 2504]
+      train preds bincount: [2681 2530]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(0.1s)
 Classification model with 10 trees
-(0.3s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(0.0s)
 
-      train preds bincount: [2713 2498]
-      train: accuracy = 99.88%, precision = 100.00%, recall = 99.76%
-      valid: accuracy = 99.85%, precision = 100.00%, recall = 99.69%
+      train preds bincount: [2686 2525]
+      train: accuracy = 99.90%, precision = 100.00%, recall = 99.80%
+      valid: accuracy = 99.77%, precision = 100.00%, recall = 99.51%
 
 
 
@@ -26,17 +28,19 @@ regression targets with min=34900.0, max=755000.0, mean=180921.2
 train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'}...
 (0.0s)
 
-      train preds: min=39308.7, max=654616.1, mean=175713.1
-      train: log(MSE): 19.2, MAE: 10490.2
-      valid: log(MSE): 21.4, MAE: 20968.8
+      train preds: min=46802.3, max=598648.3, mean=173457.3
+      train: log(MSE): 19.1, MAE: 10033.0
+      valid: log(MSE): 20.8, MAE: 19979.9
 
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(0.0s)
 Regression model with 10 trees
-(0.3s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(0.0s)
 
-      train preds: min=48707.2, max=601672.0, mean=181625.6
-      train: log(MSE): 19.5, MAE: 11724.4
-      valid: log(MSE): 21.4, MAE: 21492.0
+      train preds: min=64161.5, max=409325.2, mean=179336.2
+      train: log(MSE): 20.5, MAE: 17532.3
+      valid: log(MSE): 21.2, MAE: 22450.3
 
 
 
@@ -47,17 +51,19 @@ binary classification with 24825 true and 282686 false
 train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
 (1.9s)
 
-      train preds bincount: [245990     19]
-      train: accuracy = 91.91%, precision = 84.21%, recall = 0.08%
-      valid: accuracy = 92.01%, precision = 62.50%, recall = 0.10%
+      train preds bincount: [245981     28]
+      train: accuracy = 91.96%, precision = 75.00%, recall = 0.11%
+      valid: accuracy = 91.83%, precision = 42.86%, recall = 0.06%
 
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(3.4s)
 Classification model with 10 trees
-(6.5s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(1.4s)
 
-      train preds bincount: [245995     14]
-      train: accuracy = 91.91%, precision = 71.43%, recall = 0.05%
-      valid: accuracy = 92.01%, precision = 100.00%, recall = 0.04%
+      train preds bincount: [246009]
+      train: accuracy = 91.95%, precision = 0.00%, recall = 0.00%
+      valid: accuracy = 91.83%, precision = 0.00%, recall = 0.00%
 
 
 
@@ -66,19 +72,22 @@ Santander Value:
 X.shape: train (3568, 4991), valid (891, 4991)
 regression targets with min=30000.0, max=40000000.0, mean=5944923.3
 train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
-(2.6s)
+(2.7s)
 
-      train preds: min=649804.8, max=38283792.0, mean=5793855.0
-      train: log(MSE): 31.1, MAE: 4026305.3
-      valid: log(MSE): 31.6, MAE: 4960481.4
+      train preds: min=-226014.3, max=35997636.0, mean=5849392.0
+      train: log(MSE): 31.1, MAE: 4037790.8
+      valid: log(MSE): 31.5, MAE: 4940208.0
 
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(2.7s)
 Regression model with 10 trees
-(13.3s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(0.5s)
 
-      train preds: min=951206.2, max=37831431.5, mean=5999155.0
-      train: log(MSE): 31.3, MAE: 4421543.2
-      valid: log(MSE): 31.6, MAE: 5075307.6
+      train preds: min=716305.5, max=31517091.1, mean=6058313.4
+      train: log(MSE): 31.5, MAE: 4874474.9
+      valid: log(MSE): 31.5, MAE: 5059968.4
+
 
 
 M5:
@@ -87,16 +96,18 @@ loading from cache
 X.shape: train (37734424, 14), valid (9433606, 14)
 regression targets with min=0.0, max=763.0, mean=1.2
 train & predict xgboost with: {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'}...
-(42.3s)
+(42.9s)
 
-      train preds: min=0.0, max=623.1, mean=1.2
+      train preds: min=0.0, max=582.9, mean=1.2
       train: MSE: 4.6, MAE: 0.8
       valid: MSE: 4.7, MAE: 0.8
 
-train & predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(69.4s)
 Regression model with 10 trees
-(115.9s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=10, learning_rate=0.3)...
+(23.4s)
 
-      train preds: min=0.1, max=484.4, mean=1.2
-      train: MSE: 4.5, MAE: 0.9
-      valid: MSE: 4.6, MAE: 0.9
+      train preds: min=0.1, max=152.5, mean=1.2
+      train: MSE: 5.0, MAE: 0.9
+      valid: MSE: 5.0, MAE: 0.9 # TODO: MSE went up with the stored variance calc?

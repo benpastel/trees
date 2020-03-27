@@ -189,6 +189,8 @@ def load_m5():
 
 
 if __name__ == '__main__':
+  TREE_COUNT = 100
+
   benchmark_names = [
     'Agaricus',
     'House Prices',
@@ -206,19 +208,19 @@ if __name__ == '__main__':
   ]
 
   xgboost_args = [
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'exact'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'approx'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': 10, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'exact'},
+    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'approx'},
+    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
+    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
   ]
 
   tree_params = [
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = 10, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
+    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
   ]
 
   for b, name in enumerate(benchmark_names):
@@ -247,11 +249,13 @@ if __name__ == '__main__':
       valid_preds = model.predict(valid_X)
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
 
-    with timed(f'train & predict our tree with {tree_params[b]}...'):
-    # with profiled():
+    with timed(f'train our tree with {tree_params[b]}...'):
+      # with profiled():
       model = fit(train_X, train_y, tree_params[b])
-      print(model.__str__(verbose=False))
+    print(model.__str__(verbose=False))
 
+    with timed(f'predict our tree with {tree_params[b]}...'):
+      # with profiled():
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)

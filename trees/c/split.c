@@ -12,7 +12,7 @@ static PyMethodDef Methods[] = {
 };
 
 /*
- * outputs None or (split_col, split_val)
+ * outputs None or (split_col, split_val, split_score)
  */
 static PyObject* split(PyObject *dummy, PyObject *args)
 {
@@ -132,7 +132,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
     Py_DECREF(y);
 
     if (best_split_score < max_split_score) {
-        return Py_BuildValue("(ii)", best_split_col, best_split_val);
+        return Py_BuildValue("(iid)", best_split_col, best_split_val, best_split_score);
     } else {
         // unable to improve score by splitting
         Py_RETURN_NONE;

@@ -9,16 +9,14 @@ from trees.splits import Split, choose_split
 
 class Node:
   # indices in the input data contained in this node
-  def __init__(self, depth: int, count: int):
+  def __init__(self, depth: int, count: int, parent: Optional['Node'] = None):
     self.depth = depth
     self.count = count
+    self.parent = parent
 
-    # stay None for leaves
     self.split: Optional[Split] = None
     self.left_child: Optional['Node'] = None
     self.right_child: Optional['Node'] = None
-
-    # non-none for leaves
     self.value: Optional[float] = None
 
   def __str__(self, level = 0):
@@ -52,19 +50,19 @@ def fit_tree(
   assert X.dtype == np.uint8
   assert X.ndim == 2
   assert y.ndim == 1
-  assert y.shape == (X.shape[0],)
+  rows, feats = X.shape
+  assert y.shape == (rows,)
 
-  all_indices = np.arange(X.shape[0], dtype=np.intp)
-  root = Node(depth=1, count=X.shape[0])
+  all_indices = np.arange(rows, dtype=np.intp)
+  root = Node(1, rows)
   all_nodes = [root]
 
-  # for BFS splitting
+  # for DFS splitting
   # indices show which rows are inside the corresponding node
   open_nodes = [root]
   open_indices = [all_indices]
 
   preds = np.zeros_like(y)
-  pred_count = np.zeros(len(preds), dtype=int) # TODO remove
 
   while len(open_nodes) > 0:
     node = open_nodes.pop()
@@ -72,24 +70,30 @@ def fit_tree(
     X_in_node = X[idx, :]
     y_in_node = y[idx]
 
-    if node.depth == params.max_depth or (split := choose_split(X_in_node, y_in_node, params)) is None:
+    if node.parent is None:
+      parent_score = np.var(y)
+    else:
+      parent_score = node.parent.split.score
+
+    if node.depth == params.max_depth or \
+        (split := choose_split(X_in_node, y_in_node, parent_score, params)) is None:
       # leaf
       node.value = np.mean(y_in_node)
       preds[idx] = node.value
-      pred_count[idx] += 1
     else:
       # not leaf
       node.split = split
-      left_idx = idx[X_in_node[:, split.column] <= split.value]
-      right_idx = idx[X_in_node[:, split.column] > split.value]
-      node.left_child = Node(node.depth + 1, len(left_idx))
-      node.right_child = Node(node.depth + 1, len(right_idx))
+      is_left = (X_in_node[:, split.column] <= split.value)
+
+      left_idx = idx[is_left]
+      right_idx = idx[~is_left]
+      node.left_child = Node(node.depth + 1, len(left_idx), parent=node)
+      node.right_child = Node(node.depth + 1, len(right_idx), parent=node)
 
       all_nodes += [node.left_child, node.right_child]
       open_nodes += [node.left_child, node.right_child]
       open_indices += [left_idx, right_idx]
 
-  assert np.all(pred_count == 1)
   return Tree(root, all_nodes), preds
 
 
@@ -97,7 +101,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
   assert X.dtype == np.uint8
   assert X.ndim == 2
 
-  # BFS through nodes so that we know the parent indices when we reach the child
+  # DFS through nodes so that we know the parent indices when we reach the child
   open_nodes = [tree.root]
   open_indices = [np.arange(X.shape[0], dtype=np.intp)]
   values = np.zeros(len(X))
@@ -106,10 +110,10 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
     idx = open_indices.pop()
 
     if node.split is not None:
-      vals = X[idx, node.split.column]
+      is_left = (X[idx, node.split.column] <= node.split.value)
 
-      left_idx = idx[vals <= node.split.value]
-      right_idx = idx[vals > node.split.value]
+      left_idx = idx[is_left]
+      right_idx = idx[~is_left]
 
       open_nodes += [node.left_child, node.right_child]
       open_indices += [left_idx, right_idx]
