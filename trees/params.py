@@ -7,4 +7,4 @@ class Params:
   extra_leaf_penalty: float = 0.0
   max_depth: int = 6
   tree_count: int = 10
-  learning_rate: float = 0.1
+  learning_rate: float = 0.3

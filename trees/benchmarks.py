@@ -273,21 +273,21 @@ if __name__ == '__main__':
   TREE_COUNT = 10
 
   benchmark_names = [
-    'Agaricus',
-    'House Prices',
-    'Home Credit Default Risk',
-    'Santander Value',
+    # 'Agaricus',
+    # 'House Prices',
+    # 'Home Credit Default Risk',
+    # 'Santander Value',
     'M5',
-    'Grupo'
+    # 'Grupo'
   ]
 
   load_data_functions = [
-    load_agaricus,
-    load_house_prices,
-    load_credit,
-    load_santander,
+    # load_agaricus,
+    # load_house_prices,
+    # load_credit,
+    # load_santander,
     load_m5,
-    load_grupo
+    # load_grupo
   ]
 
   xgboost_args = {'n_estimators': TREE_COUNT, 'tree_method': 'hist'}
@@ -312,20 +312,20 @@ if __name__ == '__main__':
     else:
       print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
-    # with timed(f'train & predict xgboost with: {xgboost_args}...'):
-    #   if is_regression:
-    #     model = xgb.XGBRegressor(**xgboost_args)
-    #   else:
-    #     model = xgb.XGBClassifier(**xgboost_args)
+    with timed(f'train & predict xgboost with: {xgboost_args}...'):
+      if is_regression:
+        model = xgb.XGBRegressor(**xgboost_args)
+      else:
+        model = xgb.XGBClassifier(**xgboost_args)
 
-    #   model.fit(train_X, train_y)
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+      model.fit(train_X, train_y)
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
     with timed(f'train our tree with {tree_params}...'):
       # with profiled():
