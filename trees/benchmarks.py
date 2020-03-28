@@ -1,4 +1,5 @@
 import os
+import gc
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -187,16 +188,97 @@ def load_m5():
     np.savez_compressed(M5_CACHE, X=X, y=y)
   return X, y
 
+GRUPO_CACHE = 'data/grupo/cache.npz'
+def load_grupo():
+  if os.path.isfile(GRUPO_CACHE):
+    print('loading from cache')
+    cached = np.load(GRUPO_CACHE)
+    return cached['X'], cached['y']
+
+  frame = pd.read_csv('data/grupo/train.csv', usecols=[0, 1, 2, 3, 4, 5, 10], dtype=np.uint32)
+
+  # weeks are 3-9:
+  #   train: 6-8
+  #   valid: 9
+  #
+  # features:
+  #   over 5 categories (agency, canal, ruta, cliente, producto)
+  #     over 5 stats (count, sum, mean, sum_sqs, var)
+  #       over 3 periods (lag 1 week, lag 2 weeks, lag 3 weeks)
+  #
+  # for 5 * 5 * 3 = 75 features total
+  # aggregating them efficiently is a little tricky
+  feats = 75
+  train_valid_count = np.count_nonzero(frame['Semana'].values >= 6)
+  X = np.zeros((train_valid_count, feats), dtype=np.float32)
+
+  categories = ['Agencia_ID', 'Canal_ID', 'Ruta_SAK', 'Cliente_ID', 'Producto_ID']
+  stat_names = ['counts', 'sums', 'sum_sqs', 'means', 'vars']
+  lags = [1, 2, 3]
+
+  for c, category in enumerate(categories):
+    # dense-encode the column values as their indices into the unique array
+    uniqs, encoded = np.unique(frame[category].values, return_inverse=True)
+
+    with timed(f'Aggregating stats for {category}...'):
+      # key is week + stat name
+      # value is array of stats for each unique value
+      stats = {}
+      for w in [3, 4, 5, 6, 7, 8]:
+        is_week = (frame['Semana'].values == w)
+
+        values = encoded[is_week]
+        targets = frame['Demanda_uni_equil'].values[is_week]
+
+        counts = np.bincount(values, minlength=len(encoded))
+        sums = np.bincount(values, weights=targets, minlength=len(encoded))
+        sum_sqs = np.bincount(values, weights=(targets * targets), minlength=len(encoded))
+
+        stats[f'{w}_counts'] = counts
+        stats[f'{w}_sums'] = sums
+        stats[f'{w}_sum_sqs'] = sum_sqs
+
+        safe_counts = np.maximum(1, counts) # for division
+
+        means = sums / safe_counts
+        stats[f'{w}_means'] = means
+        stats[f'{w}_vars']= (sum_sqs / safe_counts) - (means * means)
+
+    with timed(f'Writing features for {category}...'):
+      for w in [6, 7, 8, 9]:
+
+        # frame is sorted by week,
+        # so X is just frame shifted because we dropped weeks 3,4,5
+        X_is_week = (frame['Semana'].values[-train_valid_count:] == w)
+        X_codes = encoded[-train_valid_count:][X_is_week]
+
+        per_cat_feats = len(lags) * len(stat_names)
+        per_cat_feat = 0
+        for lag in lags:
+          for stat_name in stat_names:
+            aggs = stats[f'{w-lag}_{stat_name}']
+            f = c * per_cat_feats + per_cat_feat
+            X[X_is_week, f] = aggs[X_codes]
+            per_cat_feat += 1
+
+        assert per_cat_feat == per_cat_feats
+
+  y = frame['Demanda_uni_equil'].values[-train_valid_count:].astype(np.uint16)
+  with timed('saving...'):
+    np.savez_compressed(GRUPO_CACHE, X=X, y=y)
+  return X, y
+
 
 if __name__ == '__main__':
-  TREE_COUNT = 100
+  TREE_COUNT = 10
 
   benchmark_names = [
     'Agaricus',
     'House Prices',
     'Home Credit Default Risk',
     'Santander Value',
-    'M5'
+    'M5',
+    'Grupo'
   ]
 
   load_data_functions = [
@@ -204,59 +286,58 @@ if __name__ == '__main__':
     load_house_prices,
     load_credit,
     load_santander,
-    load_m5
+    load_m5,
+    load_grupo
   ]
 
-  xgboost_args = [
-    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'exact'},
-    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'approx'},
-    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
-    {'n_estimators': TREE_COUNT, 'eta': 0.3, 'tree_method': 'hist'},
-  ]
-
-  tree_params = [
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
-    Params(min_leaf_size = 10, max_depth = 6, extra_leaf_penalty = 0.0, tree_count = TREE_COUNT, learning_rate = 0.3),
-  ]
+  xgboost_args = {'n_estimators': TREE_COUNT, 'tree_method': 'hist'}
+  tree_params = Params(tree_count = TREE_COUNT)
 
   for b, name in enumerate(benchmark_names):
     print(f'\n\n{name}:\n')
 
+    # split the time-series according to time
     X, y = load_data_functions[b]()
     train_X, train_y, valid_X, valid_y = split(X, y)
+    del X
+    del y
+    gc.collect()
     print(f'X.shape: train {train_X.shape}, valid {valid_X.shape}')
 
     # only handle regression or binary classification cases so far
     is_regression = (train_y.dtype != np.bool)
 
     if is_regression:
-      print(f'regression targets with min={np.min(y):.1f}, max={np.max(y):.1f}, mean={np.mean(y):.1f}')
+      print(f'regression targets with min={np.min(train_y):.1f}, max={np.max(train_y):.1f}, mean={np.mean(train_y):.1f}')
     else:
-      print(f'binary classification with {np.count_nonzero(y)} true and {np.count_nonzero(~y)} false')
+      print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
-    with timed(f'train & predict xgboost with: {xgboost_args[b]}...'):
-      if is_regression:
-        model = xgb.XGBRegressor(**xgboost_args[b])
-      else:
-        model = xgb.XGBClassifier(**xgboost_args[b])
+    # with timed(f'train & predict xgboost with: {xgboost_args}...'):
+    #   if is_regression:
+    #     model = xgb.XGBRegressor(**xgboost_args)
+    #   else:
+    #     model = xgb.XGBClassifier(**xgboost_args)
 
-      model.fit(train_X, train_y)
-      train_preds = model.predict(train_X)
-      valid_preds = model.predict(valid_X)
-    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    #   model.fit(train_X, train_y)
+    #   train_preds = model.predict(train_X)
+    #   valid_preds = model.predict(valid_X)
+    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    # del model
+    # del train_preds
+    # del valid_preds
+    # gc.collect()
 
-    with timed(f'train our tree with {tree_params[b]}...'):
+    with timed(f'train our tree with {tree_params}...'):
       # with profiled():
-      model = fit(train_X, train_y, tree_params[b])
+      model = fit(train_X, train_y, tree_params)
     print(model.__str__(verbose=False))
 
-    with timed(f'predict our tree with {tree_params[b]}...'):
+    with timed(f'predict our tree with {tree_params}...'):
       # with profiled():
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()

@@ -18,13 +18,15 @@ static PyObject* split(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg=NULL, *y_arg=NULL;
     double max_split_score;
-    uint32_t min_leaf_size;
+    int int_min_leaf_size;
 
     if (!PyArg_ParseTuple(args, "O!O!di",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &max_split_score,
-        &min_leaf_size)) return NULL;
+        &int_min_leaf_size)) return NULL;
+
+    uint64_t min_leaf_size = (uint64_t) int_min_leaf_size;
 
     PyObject *X = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -36,8 +38,8 @@ static PyObject* split(PyObject *dummy, PyObject *args)
     uint8_t * restrict X_ptr = (uint8_t *) PyArray_DATA((PyArrayObject *) X);
     double * restrict y_ptr = (double *) PyArray_DATA((PyArrayObject *) y);
 
-    const int rows = (int) PyArray_DIM((PyArrayObject *) X, 0);
-    const int cols = (int) PyArray_DIM((PyArrayObject *) X, 1);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X, 1);
     const int vals = 256;
 
     int best_split_col = -1;
@@ -47,10 +49,10 @@ static PyObject* split(PyObject *dummy, PyObject *args)
     // parallelize over the features
     // so that each thread writes to distinct memory
     #pragma omp parallel for
-    for (int c = 0; c < cols; c++) {
+    for (uint64_t c = 0; c < cols; c++) {
 
         // for each unique X value, aggregate stats about y
-        uint32_t counts [vals];
+        uint64_t counts [vals];
         double sums [vals];
         double sum_sqs [vals];
 
@@ -58,7 +60,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
         memset(sums, 0, sizeof(sums));
         memset(sum_sqs, 0, sizeof(sum_sqs));
 
-        for (int r = 0; r < rows; r++) {
+        for (uint64_t r = 0; r < rows; r++) {
             uint8_t v = X_ptr[r * cols + c];
             counts[v]++;
             sums[v] += y_ptr[r];
@@ -66,7 +68,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
         }
 
         // totals
-        uint32_t total_count = 0;
+        uint64_t total_count = 0;
         double total_sum = 0;
         double total_sum_sqs = 0;
         for (int v = 0; v < vals; v++) {
@@ -76,7 +78,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
         }
 
         // running sums from the left side
-        uint32_t left_count = 0;
+        uint64_t left_count = 0;
         double left_sum = 0;
         double left_sum_sqs = 0;
 
@@ -92,7 +94,7 @@ static PyObject* split(PyObject *dummy, PyObject *args)
             left_sum += sums[v];
             left_sum_sqs += sum_sqs[v];
 
-            uint32_t right_count = total_count - left_count;
+            uint64_t right_count = total_count - left_count;
 
             if (counts[v] == 0 || left_count < min_leaf_size || right_count < min_leaf_size) {
                 // not a valid splitting point
