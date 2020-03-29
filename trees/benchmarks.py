@@ -1,5 +1,6 @@
 import os
 import gc
+import sys
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -270,28 +271,30 @@ def load_grupo():
 
 
 if __name__ == '__main__':
-  TREE_COUNT = 10
+  if 'TREE_COUNT' not in os.environ:
+    raise ValueError('Expected env variable TREE_COUNT')
+  tree_count = int(os.environ['TREE_COUNT'])
 
   benchmark_names = [
-    # 'Agaricus',
-    # 'House Prices',
-    # 'Home Credit Default Risk',
-    # 'Santander Value',
+    'Agaricus',
+    'House Prices',
+    'Home Credit Default Risk',
+    'Santander Value',
     'M5',
-    # 'Grupo'
+    'Grupo'
   ]
 
   load_data_functions = [
-    # load_agaricus,
-    # load_house_prices,
-    # load_credit,
-    # load_santander,
+    load_agaricus,
+    load_house_prices,
+    load_credit,
+    load_santander,
     load_m5,
-    # load_grupo
+    load_grupo
   ]
 
-  xgboost_args = {'n_estimators': TREE_COUNT, 'tree_method': 'hist'}
-  tree_params = Params(tree_count = TREE_COUNT)
+  xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
+  tree_params = Params(tree_count = tree_count)
 
   for b, name in enumerate(benchmark_names):
     print(f'\n\n{name}:\n')
