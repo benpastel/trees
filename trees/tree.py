@@ -36,8 +36,8 @@ def fit_tree(
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
   node_count = build_tree(
-    X,
-    y,
+    X.copy(), # TODO
+    y.copy(),
     split_cols,
     split_vals,
     left_children,

@@ -16,6 +16,8 @@ static PyMethodDef Methods[] = {
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
+    printf("entered function\n"); fflush(stdout);
+
     PyObject *X_arg, *y_arg;
     PyObject *split_col_arg, *split_val_arg, *left_children_arg, *right_children_arg, *node_mean_arg;
     double split_penalty;
@@ -33,6 +35,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &split_penalty,
         &int_min_leaf_size)) return NULL;
 
+    printf("parsed\n"); fflush(stdout);
+
     // row count needs to be uint64_t for large datasets,
     // so also use it for anything that gets compared to rows
     assert(0 < int_min_leaf_size);
@@ -45,7 +49,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
     PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *right_children_obj = PyArray_FROM_OTF(right_children_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *node_mean_obj = PyArray_FROM_OTF(right_children_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+    PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         y_obj == NULL ||
@@ -72,19 +76,22 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint8_t *  restrict split_val      = (uint8_t *)  PyArray_DATA((PyArrayObject *) split_val_obj);
     uint16_t * restrict left_children  = (uint16_t *) PyArray_DATA((PyArrayObject *) left_children_obj);
     uint16_t * restrict right_children = (uint16_t *) PyArray_DATA((PyArrayObject *) right_children_obj);
-    double *   restrict node_means     = (double *)   PyArray_DATA((PyArrayObject *) node_mean_arg);
+    double *   restrict node_means     = (double *)   PyArray_DATA((PyArrayObject *) node_mean_obj);
+
+    printf("C arrays created\n"); fflush(stdout);
 
     const npy_intp raw_rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
     const npy_intp raw_cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const npy_intp raw_max_nodes = PyArray_DIM((PyArrayObject *) left_children, 0);
-    assert(0 < raw_rows && raw_rows < UINT64_MAX);
-    assert(0 < raw_cols && raw_cols < UINT64_MAX);
-    assert(0 < raw_max_nodes && raw_max_nodes < UINT16_MAX);
+    const npy_intp raw_max_nodes = PyArray_DIM((PyArrayObject *) left_children_obj, 0);
+    // assert(0 < raw_rows && raw_rows < UINT64_MAX);
+    // assert(0 < raw_cols && raw_cols < UINT64_MAX);
+    // assert(0 < raw_max_nodes && raw_max_nodes < UINT16_MAX);
 
     const uint64_t rows = (uint64_t) raw_rows;
     const uint64_t cols = (uint64_t) raw_cols;
     const uint16_t max_nodes = (uint16_t) raw_max_nodes;
     const int vals = 256;
+    printf("rows, cols, max_nodes, vals: %d, %d, %d, %d\n", rows, cols, max_nodes, vals); fflush(stdout);
 
     int node_count = 1;
     uint16_t memberships [rows]; // the node index each row is assigned to
@@ -101,13 +108,20 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         node_scores[n] = DBL_MAX; // TODO this is dumb
     }
 
+    printf("done with setup\n"); fflush(stdout);
+
     bool made_a_split = true;
     while (node_count < max_nodes && made_a_split) {
         made_a_split = false;
 
+        printf("top of loop\n"); fflush(stdout);
+
         // build stats for all nodes, parellized over columns
         // #pragma omp parallel for TODO: re-enable
         for (uint64_t c = 0; c < cols; c++) {
+
+            printf("building hist for column: %d\n", (int) c); fflush(stdout);
+
 
             // for each node & each unique X value, aggregate stats about y
             uint64_t counts  [node_count][vals];
@@ -125,6 +139,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 sums   [n][v] += y[r];
                 sum_sqs[n][v] += y[r] * y[r];
             }
+
+            printf("checking splits\n"); fflush(stdout);
+
 
             // for each node, decide if this column is worth splitting
             for (uint16_t n = 0; n < node_count; n++) {
@@ -192,6 +209,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     }
                 }
 
+                printf("updating scores\n"); fflush(stdout);
+
                 // TODO: also try letting each thread keep a local copy to avoid the sync
                 // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
@@ -206,6 +225,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
         }
+
+        printf("updating metadata\n"); fflush(stdout);
+
         // finished choosing splits
         // update node metadata for new splits
         int new_node_count = node_count;
@@ -225,6 +247,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
         node_count = new_node_count;
 
+        printf("updating row memberships\n"); fflush(stdout);
+
         // update row membership in the nodes that split
         for (uint64_t r = 0; r < rows; r++) {
             if (should_split[r]) {
@@ -240,6 +264,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
         }
     }
+
+    printf("finding means\n"); fflush(stdout);
+
 
     // finally, calculate the mean at each leaf node
     // TODO save these
@@ -257,6 +284,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             node_means[n] = node_sums[n] / node_counts[n];
         }
     }
+
+    printf("done\n"); fflush(stdout);
 
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);

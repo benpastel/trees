@@ -8,7 +8,7 @@ test: build
 	python -m pytest
 
 run: test
-# 	python -m pytest
+	python -m pytest
 	python -m trees.benchmarks
 
 disassemble:
