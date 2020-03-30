@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
-from trees.c.tree import build_tree
+from trees.c.build_tree import build_tree
 
 @dataclass
 class Tree:
@@ -33,6 +33,7 @@ def fit_tree(
   split_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
   left_children = np.zeros((params.max_nodes,), dtype=np.uint16)
   right_children = np.zeros((params.max_nodes,), dtype=np.uint16)
+  node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
   node_count = build_tree(
     X,
@@ -42,7 +43,7 @@ def fit_tree(
     left_children,
     right_children,
     node_means,
-    params.extra_leaf_penalty
+    params.extra_leaf_penalty,
     params.min_leaf_size)
 
   # filter down to the number of nodes we actually used
@@ -78,7 +79,6 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
       values[idx] = node.value
       value_set_count[idx] += 1
     else:
-      #
       is_left = (X[idx, tree.split_cols[n]] <= tree.split_vals[n])
 
       left_idx = idx[is_left]
@@ -86,8 +86,6 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
 
       open_nodes += [tree.left_children[n], node.right_children[n]]
       open_indices += [left_idx, right_idx]
-    else:
-      values[idx] = node.value
 
   assert np.all(value_set_count == 1)
   return values

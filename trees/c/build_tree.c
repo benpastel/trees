@@ -3,8 +3,10 @@
 #include <math.h>
 #define NPY_NO_DEPRECATED_API NPY_API_VERSION
 #include <arrayobject.h>
+#include <stdbool.h>
+#include <float.h>
 
-static PyObject* split(PyObject *self, PyObject *args);
+static PyObject* build_tree(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"build_tree", build_tree, METH_VARARGS, ""},
@@ -85,17 +87,22 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const int vals = 256;
 
     int node_count = 1;
-    const uint16_t memberships [rows]; // the node index each row is assigned to
-    const bool should_split   [max_nodes];
-    const bool done_splitting [max_nodes];
+    uint16_t memberships [rows]; // the node index each row is assigned to
+    double node_scores  [max_nodes];
+    bool should_split   [max_nodes];
+    bool done_splitting [max_nodes];
 
     // rows begin a member of the root (node 0)
     memset(&memberships,    0, sizeof memberships);
     memset(&should_split,   false, sizeof should_split);
     memset(&done_splitting, false, sizeof done_splitting);
 
+    for (uint16_t n = 0; n < max_nodes; n++) {
+        node_scores[n] = DBL_MAX; // TODO this is dumb
+    }
+
     bool made_a_split = true;
-    while (node_count < max_node_count && made_a_split) {
+    while (node_count < max_nodes && made_a_split) {
         made_a_split = false;
 
         // build stats for all nodes, parellized over columns
@@ -112,11 +119,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             memset(sum_sqs, 0, sizeof sum_sqs);
 
             for (uint64_t r = 0; r < rows; r++) {
-                uint8_t v = X_ptr[r * cols + c];
+                uint8_t v = X[r * cols + c];
                 uint16_t n = memberships[r];
                 counts [n][v]++;
-                sums   [n][v] += y_ptr[r];
-                sum_sqs[n][v] += y_ptr[r] * y_ptr[r];
+                sums   [n][v] += y[r];
+                sum_sqs[n][v] += y[r] * y[r];
             }
 
             // for each node, decide if this column is worth splitting
@@ -136,9 +143,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 assert(total_count > 0);
 
                 // recalculate the baseline score for this node
-                // possibly wasteful - but we needed the totals anyway
+                // TODO this is stupid
                 double total_mean = total_sum / total_count;
                 double baseline_score = (total_sum_sqs / total_count) - (total_mean * total_mean);
+                if (baseline_score < node_scores[n]) {
+                    node_scores[n] = baseline_score;
+                }
+
 
                 // running sums from the left side
                 uint64_t left_count = 0;
@@ -185,10 +196,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
                 {
-                    if (col_split_score < node_score[n]) {
-                        node_score[n] = col_split_score;
-                        node_split_col[n] = c;
-                        node_split_val[n] = col_split_val;
+                    if (col_split_score < node_scores[n]) {
+                        node_scores[n] = col_split_score;
+                        split_col[n] = c;
+                        split_val[n] = col_split_val;
                         should_split[n] = true;
                     }
 
@@ -199,7 +210,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // update node metadata for new splits
         int new_node_count = node_count;
         for (uint16_t n = 0; n < node_count; n++) {
-            if (should_split[n] && new_node_count <= max_node_count - 2) {
+            if (should_split[n] && new_node_count <= max_nodes - 2) {
                 // make the split
                 left_children[n] = new_node_count;
                 right_children[n] = new_node_count + 1;
@@ -218,7 +229,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint64_t r = 0; r < rows; r++) {
             if (should_split[r]) {
                 uint16_t old_n = memberships[r];
-                if (X[r, node_split_col[old_n]] <= node_split_val[old_n]) {
+                uint8_t val = X[r * cols + split_col[old_n]];
+                if (val <= split_val[old_n]) {
                     // assign row to left child
                     memberships[r] = left_children[old_n];
                 } else {
@@ -231,13 +243,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // finally, calculate the mean at each leaf node
     // TODO save these
-    const int node_counts [node_count];
-    const int node_sums   [node_count];
+    int node_counts [node_count];
+    int node_sums   [node_count];
     memset(node_counts, 0, sizeof node_counts);
     memset(node_sums, 0, sizeof node_sums);
     for (uint64_t r = 0; r < rows; r++) {
         int n = memberships[r];
-        node_count[n]++;
+        node_counts[n]++;
         node_sums[n] += y[r];
     }
     for (uint16_t n = 0; n < node_count; n++) {

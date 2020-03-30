@@ -4,7 +4,6 @@ from trees.splits import choose_split
 from trees.params import Params
 
 
-# TODO add test case with EXACT output score
 def test_choose_split():
   # this case is perfectly split by 2nd column
   X = np.array([
