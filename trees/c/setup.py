@@ -1,6 +1,6 @@
 from distutils.core import setup, Extension
 
-module = Extension('split', sources=['split.c'],
+module = Extension('build_tree', sources=['build_tree.c'],
   include_dirs=[
     '/usr/local/lib',
     '/usr/local/lib/python3.8/site-packages/numpy/core/include/numpy/'],
@@ -8,5 +8,5 @@ module = Extension('split', sources=['split.c'],
     extra_link_args = ['-lomp']
   )
 
-setup(name='split', ext_modules=[module])
+setup(name='build_tree', ext_modules=[module])
 
