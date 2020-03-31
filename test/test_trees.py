@@ -9,25 +9,25 @@ from trees.params import Params
 def test_fit_tree():
   # expect a single split:
   # col 1 <= val 1
-  X = np.array([
-    [0, 2],
-    [1, 6],
-    [1, 2],
-    [1, 7],
-  ], dtype=np.uint8)
-  y = np.array([1, 0, 1, 0])
-  tree, preds = fit_tree(
-    X,
-    y,
-    Params(min_leaf_size=1, extra_leaf_penalty=0.0)
-  )
-  print(tree)
-  assert tree.node_count == 3
-  assert_array_equal(tree.left_children, [1, 0, 0])
-  assert_array_equal(tree.right_children, [2, 0, 0])
-  assert_array_equal(tree.split_cols, [1, 0, 0])
-  assert_array_equal(tree.split_vals, [2, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0.0, 1.0, 0.0])
+  # X = np.array([
+  #   [0, 2],
+  #   [1, 6],
+  #   [1, 2],
+  #   [1, 7],
+  # ], dtype=np.uint8)
+  # y = np.array([1, 0, 1, 0])
+  # tree, preds = fit_tree(
+  #   X,
+  #   y,
+  #   Params(min_leaf_size=1, extra_leaf_penalty=0.0)
+  # )
+  # print(tree)
+  # assert tree.node_count == 3
+  # assert_array_equal(tree.left_children, [1, 0, 0])
+  # assert_array_equal(tree.right_children, [2, 0, 0])
+  # assert_array_equal(tree.split_cols, [1, 0, 0])
+  # assert_array_equal(tree.split_vals, [2, 0, 0])
+  # assert_array_almost_equal(tree.node_means, [0.0, 1.0, 0.0])
 
   #   <=5
   #    |  \
@@ -45,7 +45,7 @@ def test_fit_tree():
   tree, preds = fit_tree(
     X,
     y,
-    Params(min_leaf_size=1, extra_leaf_penalty=0.0)
+    Params(min_leaf_size=1, extra_leaf_penalty=2.0)
   )
   print(tree)
   assert tree.node_count == 5
@@ -69,7 +69,7 @@ def test_fit_tree():
   tree, preds = fit_tree(
     X,
     y,
-    Params(min_leaf_size=3, extra_leaf_penalty=0.0)
+    Params(min_leaf_size=3, extra_leaf_penalty=2.0)
   )
   print(tree)
   assert tree.node_count == 5
@@ -98,5 +98,5 @@ def test_fit_tree():
   assert_array_equal(tree.right_children, [2, 0, 0])
   assert_array_equal(tree.split_cols, [0, 0, 0])
   assert_array_equal(tree.split_vals, [5, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0, 100, 22/6])
+  assert_array_almost_equal(tree.node_means, [0, 22/6, 100])
 
