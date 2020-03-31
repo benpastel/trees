@@ -57,11 +57,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(y_obj);
-        // Py_XDECREF(split_col_obj);
-        // Py_XDECREF(split_val_obj);
-        // Py_XDECREF(left_children_obj);
-        // Py_XDECREF(right_children_obj);
-        // Py_XDECREF(node_mean_obj);
+        Py_XDECREF(split_col_obj);
+        Py_XDECREF(split_val_obj);
+        Py_XDECREF(left_children_obj);
+        Py_XDECREF(right_children_obj);
+        Py_XDECREF(node_mean_obj);
         return NULL;
     }
     // cast data sections of numpy arrays to plain C pointers
@@ -260,13 +260,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
-    // TODO: understand why we don't want to decref output arrays?
-    //  seems to cause memory corruption
-    // Py_DECREF(split_col_obj);
-    // Py_DECREF(split_val_obj);
-    // Py_DECREF(left_children_obj);
-    // Py_DECREF(right_children_obj);
-    // Py_DECREF(node_means);
+    Py_DECREF(split_col_obj);
+    Py_DECREF(split_val_obj);
+    Py_DECREF(left_children_obj);
+    Py_DECREF(right_children_obj);
+    Py_DECREF(node_mean_obj);
     return Py_BuildValue("i", node_count);
 }
 
