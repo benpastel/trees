@@ -86,18 +86,28 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint16_t max_nodes = (uint16_t) raw_max_nodes;
     const int vals = 256;
 
+    // the node index each row is assigned to
+    uint16_t * memberships = calloc(rows, sizeof(uint16_t));
+    if (memberships == NULL) {
+        Py_DECREF(X_obj);
+        Py_DECREF(y_obj);
+        Py_DECREF(split_col_obj);
+        Py_DECREF(split_val_obj);
+        Py_DECREF(left_children_obj);
+        Py_DECREF(right_children_obj);
+        Py_DECREF(node_mean_obj);
+        return NULL;
+    }
+
     uint16_t node_count = 1;
-    uint16_t memberships [rows]; // the node index each row is assigned to
     double node_scores  [max_nodes];
     bool should_split   [max_nodes];
     bool done_splitting [max_nodes]; // TODO can actually just do this by number
 
-    memset(&memberships,    0, sizeof memberships); // start in root (node 0)
-    memset(&should_split,   false, sizeof should_split);
-    memset(&done_splitting, false, sizeof done_splitting);
-
     for (uint16_t n = 0; n < max_nodes; n++) {
-        node_scores[n] = DBL_MAX; // TODO this is dumb
+        node_scores[n] = DBL_MAX;
+        should_split[n] = false;
+        done_splitting[n] = false;
     }
 
     bool made_a_split = true; // TODO also do this by number
@@ -263,6 +273,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
     }
 
+    free(memberships);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
