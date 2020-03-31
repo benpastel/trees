@@ -24,6 +24,7 @@ def fit_tree(
   assert X.ndim == 2
   assert y.ndim == 1
   rows, feats = X.shape
+  y = y.astype(np.double) # TODO ?
   assert y.shape == (rows,)
 
   # output arrays for c function
@@ -47,7 +48,7 @@ def fit_tree(
     params.min_leaf_size)
 
   # filter down to the number of nodes we actually used
-  return Tree(
+  tree = Tree(
     node_count,
     split_cols[:node_count],
     split_vals[:node_count],
@@ -55,6 +56,8 @@ def fit_tree(
     right_children[:node_count],
     node_means[:node_count]
   )
+  vals = eval_tree(tree, X) # TODO no
+  return tree, vals
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
@@ -76,7 +79,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
 
     if tree.left_children[n] == 0 and tree.right_children[n] == 0:
       # leaf
-      values[idx] = node.value
+      values[idx] = tree.node_means[n]
       value_set_count[idx] += 1
     else:
       is_left = (X[idx, tree.split_cols[n]] <= tree.split_vals[n])
@@ -84,7 +87,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
       left_idx = idx[is_left]
       right_idx = idx[~is_left]
 
-      open_nodes += [tree.left_children[n], node.right_children[n]]
+      open_nodes += [tree.left_children[n], tree.right_children[n]]
       open_indices += [left_idx, right_idx]
 
   assert np.all(value_set_count == 1)
