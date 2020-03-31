@@ -35,8 +35,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // row count needs to be uint64_t for large datasets,
     // so also use it for anything that gets compared to rows
-    assert(0 < int_min_leaf_size);
-    assert(0 <= split_penalty);
     uint64_t min_leaf_size = (uint64_t) int_min_leaf_size;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
@@ -151,15 +149,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 assert(total_count > 0);
 
                 // recalculate the baseline score for this node
-                // TODO this is stupid
                 double total_mean = total_sum / total_count;
                 double baseline_score = (total_sum_sqs / total_count) - (total_mean * total_mean);
-                #pragma omp critical
-                {
-                    if (baseline_score < node_scores[n]) {
-                        node_scores[n] = baseline_score;
-                    }
-                }
 
                 // running sums from the left side
                 uint64_t left_count = 0;
@@ -206,7 +197,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
                 {
-                    if (col_split_score < node_scores[n]) {
+                    if (col_split_score < node_scores[n] && col_split_score < baseline_score) {
                         node_scores[n] = col_split_score;
                         split_col[n] = c;
                         split_val[n] = col_split_val;

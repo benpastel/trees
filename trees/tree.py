@@ -24,12 +24,14 @@ def fit_tree(
   assert X.ndim == 2
   assert y.ndim == 1
   rows, feats = X.shape
-  y = y.astype(np.double) # TODO ?
   assert y.shape == (rows,)
+  y = y.astype(np.double)
+  assert 0 < params.max_nodes < 2**16
+  assert 0 < params.min_leaf_size < 2**32
+  assert 0 <= params.extra_leaf_penalty
 
   # output arrays for c function
   # pre-allocated to the max number of nodes
-  # TODO assert arrays are nice
   split_cols = np.zeros((params.max_nodes,), dtype=np.uint64)
   split_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
   left_children = np.zeros((params.max_nodes,), dtype=np.uint16)
@@ -37,8 +39,8 @@ def fit_tree(
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
   node_count = build_tree(
-    X.copy(), # TODO
-    y.copy(),
+    X,
+    y,
     split_cols,
     split_vals,
     left_children,
