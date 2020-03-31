@@ -98,19 +98,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     uint16_t node_count = 1;
+    uint16_t done_count = 0;
+
     double node_scores  [max_nodes];
     bool should_split   [max_nodes];
-    bool done_splitting [max_nodes]; // TODO can actually just do this by number
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
         should_split[n] = false;
-        done_splitting[n] = false;
     }
 
-    bool made_a_split = true; // TODO also do this by number
-    while (node_count < max_nodes && made_a_split) {
-        made_a_split = false;
+    while (node_count < max_nodes - 1 && done_count < node_count) {
 
         // build stats for all nodes, parellized over columns
         // #pragma omp parallel for TODO: re-enable
@@ -133,9 +131,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
 
             // for each node, decide if this column is worth splitting
-            for (uint16_t n = 0; n < node_count; n++) {
-                if (done_splitting[n]) continue;
-
+            for (uint16_t n = done_count; n < node_count; n++) {
                 // totals
                 // TODO maybe calculate these ahead of time? and share with end
                 uint64_t total_count = 0;
@@ -197,7 +193,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
                 {
-                    if (col_split_score < node_scores[n] && col_split_score < baseline_score) {
+                    if (col_split_score < baseline_score && col_split_score < node_scores[n]) {
                         node_scores[n] = col_split_score;
                         split_col[n] = c;
                         split_val[n] = col_split_val;
@@ -217,7 +213,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 left_children[n] = new_node_count;
                 right_children[n] = new_node_count + 1;
                 new_node_count += 2;
-                made_a_split = true;
             } else if (should_split[n]) {
                 // no room; abort the split
                 should_split[n] = false;
@@ -238,13 +233,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
         }
-        // whether we split them or not, we are done splitting all the old nodes
-        for (uint16_t n = 0; n < node_count; n++) {
-            should_split[n] = false;
-            done_splitting[n] = true;
-        }
+        done_count = node_count;
         node_count = new_node_count;
+        for (uint16_t n = 0; n < max_nodes; n++) {;
+            should_split[n] = false;
+        }
     }
+
+
     // finally, calculate the mean at each leaf node
     // TODO save these
     uint64_t node_counts [node_count];
@@ -263,6 +259,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             node_means[n] = node_sums[n] / node_counts[n];
         }
     }
+
+
 
     free(memberships);
     Py_DECREF(X_obj);
