@@ -80,7 +80,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const int vals = 256;
 
     // the node index each row is assigned to
-    uint16_t * memberships = calloc(rows, sizeof(uint16_t));
+    uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
     if (memberships == NULL) {
         Py_DECREF(X_obj);
         Py_DECREF(y_obj);
@@ -110,14 +110,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     // find the baseline of the root
-    // TODO: parallelize for with sum reduction
-    node_counts[0] = rows;
+    // accumulate in local variables so clang understands how to vectorize the loop
+    double root_sums = 0.0;
+    double root_sum_sqs = 0.0;
     for (uint64_t r = 0; r < rows; r++) {
-        node_sums[0] += y[r];
-        node_sum_sqs[0] += y[r] * y[r];
+        root_sums += y[r];
+        root_sum_sqs += y[r] * y[r];
     }
-    const double root_mean = node_sums[0] / rows;
-    node_scores[0] = (node_sum_sqs[0] / rows) - (root_mean * root_mean);
+    node_counts[0] = rows;
+    node_sums[0] = root_sums;
+    node_sum_sqs[0] = root_sum_sqs;
+    node_scores[0] = (root_sum_sqs / rows) - (root_sums / rows) * (root_sums / rows);
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
 
@@ -217,7 +220,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
 
         // update row membership & stats in the nodes that split
-        // TODO: paralellize for with sum reduction
         for (uint64_t r = 0; r < rows; r++) {
             uint16_t old_n = memberships[r];
             if (should_split[old_n]) {
