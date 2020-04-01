@@ -7,9 +7,11 @@
 #include <float.h>
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
+static PyObject* eval_tree(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"build_tree", build_tree, METH_VARARGS, ""},
+    {"eval_tree", eval_tree, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
@@ -254,6 +256,103 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(node_mean_obj);
     return Py_BuildValue("i", node_count);
 }
+
+
+static PyObject* eval_tree(PyObject *dummy, PyObject *args)
+{
+    PyObject *X_arg, *split_col_arg, *split_val_arg, *left_children_arg, *right_children_arg, *node_mean_arg;
+    PyObject *out_arg;
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!",
+        &PyArray_Type, &X_arg,
+        &PyArray_Type, &split_col_arg,
+        &PyArray_Type, &split_val_arg,
+        &PyArray_Type, &left_children_arg,
+        &PyArray_Type, &right_children_arg,
+        &PyArray_Type, &node_mean_arg,
+        &PyArray_Type, &out_arg)) return NULL;
+
+    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *right_children_obj = PyArray_FROM_OTF(right_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+
+    if (X_obj == NULL ||
+        split_col_obj == NULL ||
+        split_val_obj == NULL ||
+        left_children_obj == NULL ||
+        right_children_obj == NULL ||
+        node_mean_obj == NULL ||
+        out_obj == NULL)
+    {
+        Py_XDECREF(X_obj);
+        Py_XDECREF(split_col_obj);
+        Py_XDECREF(split_val_obj);
+        Py_XDECREF(left_children_obj);
+        Py_XDECREF(right_children_obj);
+        Py_XDECREF(node_mean_obj);
+        Py_XDECREF(out_obj);
+        return NULL;
+    }
+    // cast data sections of numpy arrays to plain C pointers
+    // this assumes the arrays are C-order, aligned, non-strided
+    uint8_t *  restrict X              = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * restrict split_col      = PyArray_DATA((PyArrayObject *) split_col_obj);
+    uint8_t *  restrict split_val      = PyArray_DATA((PyArrayObject *) split_val_obj);
+    uint16_t * restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
+    uint16_t * restrict right_children = PyArray_DATA((PyArrayObject *) right_children_obj);
+    double *   restrict node_means     = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   restrict out            = PyArray_DATA((PyArrayObject *) out_obj);
+
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+
+    // the node index each row is assigned to
+    uint16_t * memberships = calloc(rows, sizeof(uint16_t));
+    if (memberships == NULL) {
+        Py_DECREF(X_obj);
+        Py_DECREF(split_col_obj);
+        Py_DECREF(split_val_obj);
+        Py_DECREF(left_children_obj);
+        Py_DECREF(right_children_obj);
+        Py_DECREF(node_mean_obj);
+        return NULL;
+    }
+
+    // split the inputs down to leaf nodes
+    // TODO is it better to just while() inside each row??  why not
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (uint64_t r = 0; r < rows; r++) {
+            uint16_t n = memberships[r];
+            uint16_t left = left_children[n];
+            if (left != 0 && X[r*cols + split_col[n]] <= split_val[n]) {
+                memberships[r] = left;
+                changed = true;
+            } else if (left != 0) {
+                memberships[r] = right_children[n];
+                changed = true;
+            } else {
+                // at the leaf
+                out[r] = node_means[n];
+            }
+        }
+    }
+    Py_DECREF(X_obj);
+    Py_DECREF(split_col_obj);
+    Py_DECREF(split_val_obj);
+    Py_DECREF(left_children_obj);
+    Py_DECREF(right_children_obj);
+    Py_DECREF(node_mean_obj);
+    Py_DECREF(out_obj);
+    Py_RETURN_NONE;
+}
+
 
 static struct PyModuleDef mod_def =
 {

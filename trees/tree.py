@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
-from trees.c.build_tree import build_tree
+from trees.c.build_tree import build_tree, eval_tree as c_eval_tree
 
 @dataclass
 class Tree:
@@ -58,7 +58,7 @@ def fit_tree(
     right_children[:node_count],
     node_means[:node_count]
   )
-  vals = eval_tree(tree, X) # TODO no
+  vals = eval_tree(tree, X)
   return tree, vals
 
 
@@ -67,31 +67,14 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
   rows, feats = X.shape
 
-  # TODO move to C
-
-  # DFS through nodes so that we know the parent indices when we reach the child
-  open_nodes = [0]
-  open_indices = [np.arange(rows, dtype=np.intp)]
-  values = np.zeros(rows)
-  value_set_count = np.zeros(rows, dtype=int)
-
-  while len(open_nodes) > 0:
-    n = open_nodes.pop()
-    idx = open_indices.pop()
-
-    if tree.left_children[n] == 0 and tree.right_children[n] == 0:
-      # leaf
-      values[idx] = tree.node_means[n]
-      value_set_count[idx] += 1
-    else:
-      is_left = (X[idx, tree.split_cols[n]] <= tree.split_vals[n])
-
-      left_idx = idx[is_left]
-      right_idx = idx[~is_left]
-
-      open_nodes += [tree.left_children[n], tree.right_children[n]]
-      open_indices += [left_idx, right_idx]
-
-  assert np.all(value_set_count == 1)
+  values = np.zeros(rows, dtype=np.double)
+  c_eval_tree(
+    X,
+    tree.split_cols,
+    tree.split_vals,
+    tree.left_children,
+    tree.right_children,
+    tree.node_means,
+    values)
   return values
 
