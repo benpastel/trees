@@ -361,16 +361,14 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-    // naive algo for starters
     for (uint64_t r = 0; r < rows; r++) {
         for (uint64_t c = 0; c < cols; c++) {
-            out[r*cols + c] = 255;
+            float val = X[r*cols + c];
+            uint8_t sum = 0; // simple accumulator so clang can vectorize
             for (int v = 0; v < 255; v++) {
-                if (X[r*cols + c] <= bins[v]) {
-                    out[r*cols + c] = v;
-                    break;
-                }
+                sum += (val > bins[c*255 + v]);
             }
+            out[r*cols + c] = sum;
         }
     }
 

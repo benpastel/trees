@@ -16,7 +16,7 @@ def test_choose_bins():
   assert_array_equal(actual[1], ['a'])
 
 def test_apply_bins():
-  bins = np.zeros((1, 255), dtype=int)
+  bins = np.zeros((1, 255), dtype=int) + 255
   bins[0, 0] = 1
   bins[0, 1] = 3
   X = np.array([
@@ -27,4 +27,4 @@ def test_apply_bins():
     [4]
   ])
   actual = apply_bins(X, bins)
-  assert_array_equal(actual[:, 0], [0, 0, 1, 1, 255])
+  assert_array_equal(actual[:, 0], [0, 0, 1, 1, 2])
