@@ -361,6 +361,15 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
 
+    // bins is a (cols, 255) array separating X into 256 values
+    // for binning the data in X from float => uint8
+    //
+    // such that (floats in bucket 0) <= bins[c, 0] < (floats in bucket 1) <= bins[c, 1] ...
+    //
+    // instead of searching for the first bin that a value falls into
+    // we count the number of bins that the value DOESN'T fall into - this is the same thing
+    // but easier to vectorize.
+    //
     #pragma omp parallel for
     for (uint64_t c = 0; c < cols; c++) {
         for (uint64_t r = 0; r < rows; r++) {
