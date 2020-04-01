@@ -1,4 +1,4 @@
-COMPILED_C_FILE := trees/c/build_tree.cpython-38-darwin.so
+COMPILED_C_FILE := trees/c/tree.cpython-38-darwin.so
 
 build:
 	-rm $(COMPILED_C_FILE) # TODO make properly

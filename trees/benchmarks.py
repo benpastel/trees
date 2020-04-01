@@ -282,7 +282,7 @@ if __name__ == '__main__':
     'Home Credit Default Risk': load_credit,
     'Santander Value': load_santander,
     'M5': load_m5,
-    # 'Grupo': load_grupo
+    'Grupo': load_grupo
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
