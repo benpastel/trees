@@ -8,10 +8,12 @@
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
+static PyObject* apply_bins(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"build_tree", build_tree, METH_VARARGS, ""},
     {"eval_tree", eval_tree, METH_VARARGS, ""},
+    {"apply_bins", apply_bins, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
@@ -95,11 +97,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t node_count = 1;
     uint16_t done_count = 0;
 
-    double node_scores   [max_nodes];
-    uint64_t node_counts [max_nodes];
-    double node_sums     [max_nodes];
-    double node_sum_sqs  [max_nodes];
-    bool should_split    [max_nodes];
+    double   node_scores  [max_nodes];
+    uint64_t node_counts  [max_nodes];
+    double   node_sums    [max_nodes];
+    double   node_sum_sqs [max_nodes];
+    bool     should_split [max_nodes];
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
@@ -331,6 +333,52 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_RETURN_NONE;
 }
 
+
+static PyObject* apply_bins(PyObject *dummy, PyObject *args)
+{
+    PyObject *X_arg, *bins_arg, *out_arg;
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "O!O!O!",
+        &PyArray_Type, &X_arg,
+        &PyArray_Type, &bins_arg,
+        &PyArray_Type, &out_arg)) return NULL;
+
+    PyObject *X_obj    = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *bins_obj = PyArray_FROM_OTF(bins_arg,     NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *out_obj  = PyArray_FROM_OTF(out_arg,      NPY_UINT8,   NPY_ARRAY_OUT_ARRAY);
+
+    if (X_obj == NULL || bins_obj == NULL || out_obj == NULL) {
+        Py_XDECREF(X_obj);
+        Py_XDECREF(bins_obj);
+        Py_XDECREF(out_obj);
+        return NULL;
+    }
+    float *   restrict X    = PyArray_DATA((PyArrayObject *) X_obj);
+    float *   restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
+    uint8_t * restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
+
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+
+    // naive algo for starters
+    for (uint64_t r = 0; r < rows; r++) {
+        for (uint64_t c = 0; c < cols; c++) {
+            out[r*cols + c] = 255;
+            for (int v = 0; v < 255; v++) {
+                if (X[r*cols + c] <= bins[v]) {
+                    out[r*cols + c] = v;
+                    break;
+                }
+            }
+        }
+    }
+
+    Py_DECREF(X_obj);
+    Py_DECREF(bins_obj);
+    Py_DECREF(out_obj);
+    Py_RETURN_NONE;
+}
 
 static struct PyModuleDef mod_def =
 {

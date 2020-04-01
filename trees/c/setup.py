@@ -7,9 +7,9 @@ module = Extension('tree', sources=['tree.c'],
     extra_compile_args = [
       '-fopenmp',
       '-ffast-math',
-      '-Rpass=loop-vectorize',
-      '-Rpass-missed=loop-vectorize',
-      '-Rpass-analysis=loop-vectorize'
+      # '-Rpass=loop-vectorize',
+      # '-Rpass-missed=loop-vectorize',
+      # '-Rpass-analysis=loop-vectorize',
     ],
     extra_link_args = ['-lomp']
   )
