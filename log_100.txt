@@ -1,92 +1,93 @@
 Agaricus:
 
 X.shape: train (5211, 126), valid (1302, 126)
-binary classification with 3140 true and 3373 false
-train & predict xgboost with: {'n_estimators': 100, 'eta': 0.3, 'tree_method': 'exact'}...
-(0.3s)
+binary classification with 2507 true and 2704 false
+train & predict xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
+(0.1s)
 
-      train preds bincount: [2685 2526]
+      train preds bincount: [2704 2507]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
-train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(0.3s)
-Classification model with 100 trees
-predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
 (0.1s)
+Classification model with 100 trees
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(0.0s)
 
-      train preds bincount: [2691 2520]
-      train: accuracy = 99.88%, precision = 100.00%, recall = 99.76%
-      valid: accuracy = 99.85%, precision = 100.00%, recall = 99.67%
+      train preds bincount: [2249 2962]
+      train: accuracy = 88.54%, precision = 82.24%, recall = 97.17%
+      valid: accuracy = 88.86%, precision = 83.15%, recall = 96.68%
 
 
 
 House Prices:
 
 X.shape: train (1168, 79), valid (292, 79)
-regression targets with min=34900.0, max=755000.0, mean=180921.2
-train & predict xgboost with: {'n_estimators': 100, 'eta': 0.3, 'tree_method': 'approx'}...
+regression targets with min=34900.0, max=755000.0, mean=181238.3
+train & predict xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
 (0.2s)
 
-      train preds: min=35369.0, max=755190.4, mean=179149.5
-      train: log(MSE): 14.1, MAE: 795.6
-      valid: log(MSE): 21.0, MAE: 20069.1
+      train preds: min=35088.7, max=754599.1, mean=181238.2
+      train: MSE: 940319.7, MAE: 670.1
+      valid: log(MSE): 20.2, MAE: 16942.9
 
-train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(0.1s)
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(0.3s)
 Regression model with 100 trees
-predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(0.0s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(0.2s)
 
-      train preds: min=40315.5, max=676971.7, mean=179149.0
-      train: log(MSE): 18.9, MAE: 9106.5
-      valid: log(MSE): 20.8, MAE: 19639.5
+      train preds: min=35817.2, max=739719.1, mean=181238.3
+      train: log(MSE): 14.6, MAE: 906.6
+      valid: log(MSE): 20.2, MAE: 16575.0
 
 
 
 Home Credit Default Risk:
 
 X.shape: train (246009, 104), valid (61502, 104)
-binary classification with 24825 true and 282686 false
-train & predict xgboost with: {'n_estimators': 100, 'eta': 0.3, 'tree_method': 'hist'}...
+binary classification with 19806 true and 226203 false
+train & predict xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
 (3.3s)
 
-      train preds bincount: [244637   1372]
-      train: accuracy = 92.26%, precision = 78.94%, recall = 5.46%
-      valid: accuracy = 91.84%, precision = 46.09%, recall = 2.24%
+      train preds bincount: [244622   1387]
+      train: accuracy = 92.28%, precision = 79.02%, recall = 5.53%
+      valid: accuracy = 91.83%, precision = 48.41%, recall = 2.43%
 
-train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(10.9s)
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(4.9s)
 Classification model with 100 trees
-predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(2.4s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(1.8s)
 
-      train preds bincount: [246001      8]
-      train: accuracy = 91.94%, precision = 62.50%, recall = 0.03%
-      valid: accuracy = 91.87%, precision = 0.00%, recall = 0.00%
+      train preds bincount: [246009]
+      train: accuracy = 91.95%, precision = 0.00%, recall = 0.00%
+      valid: accuracy = 91.84%, precision = 0.00%, recall = 0.00%
 
 
 
 Santander Value:
 
 X.shape: train (3568, 4991), valid (891, 4991)
-regression targets with min=30000.0, max=40000000.0, mean=5944923.3
-train & predict xgboost with: {'n_estimators': 100, 'eta': 0.3, 'tree_method': 'hist'}...
-(8.3s)
+regression targets with min=30000.0, max=40000000.0, mean=5976800.7
+train & predict xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
+(7.9s)
 
-      train preds: min=-1726815.0, max=39835820.0, mean=6065493.5
-      train: log(MSE): 30.1, MAE: 2337906.8
-      valid: log(MSE): 31.5, MAE: 4789026.2
+      train preds: min=-1954557.5, max=38909728.0, mean=5969604.5
+      train: log(MSE): 30.1, MAE: 2348067.5
+      valid: log(MSE): 31.7, MAE: 5167453.5
 
-train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(13.1s)
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(51.1s)
 Regression model with 100 trees
-predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(0.5s)
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(0.6s)
 
-      train preds: min=-2995139.8, max=41076249.2, mean=6074998.6
-      train: log(MSE): 31.1, MAE: 3847588.6
-      valid: log(MSE): 31.5, MAE: 4721775.4
+      train preds: min=-3253254.2, max=41302299.6, mean=5976800.7
+      train: log(MSE): 29.8, MAE: 1669351.1
+      valid: log(MSE): 31.8, MAE: 5420995.5
+
 
 
 M5:
@@ -94,19 +95,19 @@ M5:
 loading from cache
 X.shape: train (37734424, 14), valid (9433606, 14)
 regression targets with min=0.0, max=763.0, mean=1.2
-train & predict xgboost with: {'n_estimators': 100, 'eta': 0.3, 'tree_method': 'hist'}...
-(120.9s)
+train & predict xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
+(137.6s)
 
-      train preds: min=-7.6, max=756.7, mean=1.2
-      train: MSE: 4.5, MAE: 0.8
-      valid: MSE: 4.7, MAE: 0.8
-
-train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(562.7s)
-Regression model with 100 trees
-predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.0, max_depth=6, tree_count=100, learning_rate=0.3)...
-(152.9s)
-
-      train preds: min=-17.1, max=541.6, mean=1.2
+      train preds: min=-2.9, max=760.7, mean=1.2
       train: MSE: 4.5, MAE: 0.8
       valid: MSE: 4.6, MAE: 0.8
+
+train our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(142.1s)
+Regression model with 100 trees
+predict our tree with Params(min_leaf_size=10, extra_leaf_penalty=0.01, max_nodes=64, tree_count=100, learning_rate=0.3)...
+(91.2s)
+
+      train preds: min=0.2, max=432.8, mean=1.2
+      train: MSE: 4.8, MAE: 0.9
+      valid: MSE: 4.8, MAE: 0.9
