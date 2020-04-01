@@ -311,37 +311,15 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-    // the node index each row is assigned to
-    uint16_t * memberships = calloc(rows, sizeof(uint16_t));
-    if (memberships == NULL) {
-        Py_DECREF(X_obj);
-        Py_DECREF(split_col_obj);
-        Py_DECREF(split_val_obj);
-        Py_DECREF(left_children_obj);
-        Py_DECREF(right_children_obj);
-        Py_DECREF(node_mean_obj);
-        return NULL;
-    }
-
-    // split the inputs down to leaf nodes
-    // TODO is it better to just while() inside each row??  why not
-    bool changed = true;
-    while (changed) {
-        changed = false;
-        for (uint64_t r = 0; r < rows; r++) {
-            uint16_t n = memberships[r];
-            uint16_t left = left_children[n];
-            if (left != 0 && X[r*cols + split_col[n]] <= split_val[n]) {
-                memberships[r] = left;
-                changed = true;
-            } else if (left != 0) {
-                memberships[r] = right_children[n];
-                changed = true;
-            } else {
-                // at the leaf
-                out[r] = node_means[n];
-            }
+    #pragma omp parallel for
+    for (uint64_t r = 0; r < rows; r++) {
+        uint16_t n = 0;
+        uint16_t left;
+        while ((left = left_children[n])) {
+            uint8_t val = X[r*cols + split_col[n]];
+            n = (val <= split_val[n]) ? left : right_children[n];
         }
+        out[r] = node_means[n];
     }
     Py_DECREF(X_obj);
     Py_DECREF(split_col_obj);
