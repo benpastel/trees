@@ -37,7 +37,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // row count needs to be uint64_t for large datasets,
     // so also use it for anything that gets compared to rows
-    uint64_t min_leaf_size = (uint64_t) int_min_leaf_size;
+    const uint64_t min_leaf_size = (uint64_t) int_min_leaf_size;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -74,13 +74,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t * restrict right_children = PyArray_DATA((PyArrayObject *) right_children_obj);
     double *   restrict node_means     = PyArray_DATA((PyArrayObject *) node_mean_obj);
 
-    const npy_intp raw_rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const npy_intp raw_cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const npy_intp raw_max_nodes = PyArray_DIM((PyArrayObject *) left_children_obj, 0);
-
-    const uint64_t rows = (uint64_t) raw_rows;
-    const uint64_t cols = (uint64_t) raw_cols;
-    const uint16_t max_nodes = (uint16_t) raw_max_nodes;
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
     const int vals = 256;
 
     // the node index each row is assigned to
@@ -114,6 +110,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     // find the baseline of the root
+    // TODO: parallelize for with sum reduction
     node_counts[0] = rows;
     for (uint64_t r = 0; r < rows; r++) {
         node_sums[0] += y[r];
@@ -220,6 +217,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
 
         // update row membership & stats in the nodes that split
+        // TODO: paralellize for with sum reduction
         for (uint64_t r = 0; r < rows; r++) {
             uint16_t old_n = memberships[r];
             if (should_split[old_n]) {
