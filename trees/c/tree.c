@@ -344,9 +344,9 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
         &PyArray_Type, &bins_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
-    PyObject *X_obj    = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *bins_obj = PyArray_FROM_OTF(bins_arg,     NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *out_obj  = PyArray_FROM_OTF(out_arg,      NPY_UINT8,   NPY_ARRAY_OUT_ARRAY);
+    PyObject *X_obj    = PyArray_FROM_OTF(X_arg,    NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *bins_obj = PyArray_FROM_OTF(bins_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *out_obj  = PyArray_FROM_OTF(out_arg,  NPY_UINT8,   NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL || bins_obj == NULL || out_obj == NULL) {
         Py_XDECREF(X_obj);
@@ -358,14 +358,15 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     float *   restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
     uint8_t * restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
 
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-    for (uint64_t r = 0; r < rows; r++) {
-        for (uint64_t c = 0; c < cols; c++) {
+    #pragma omp parallel for
+    for (uint64_t c = 0; c < cols; c++) {
+        for (uint64_t r = 0; r < rows; r++) {
             float val = X[r*cols + c];
             uint8_t sum = 0; // simple accumulator so clang can vectorize
-            for (int v = 0; v < 255; v++) {
+            for (uint64_t v = 0; v < 255; v++) {
                 sum += (val > bins[c*255 + v]);
             }
             out[r*cols + c] = sum;
