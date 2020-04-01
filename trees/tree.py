@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
-from trees.c.build_tree import build_tree, eval_tree as c_eval_tree
+from trees.c.tree import build_tree, eval_tree as c_eval_tree
 
 @dataclass
 class Tree:

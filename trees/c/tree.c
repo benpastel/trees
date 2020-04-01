@@ -335,14 +335,14 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 static struct PyModuleDef mod_def =
 {
     PyModuleDef_HEAD_INIT,
-    "build_tree",
+    "tree",
     "",
     -1,
     Methods
 };
 
 PyMODINIT_FUNC
-PyInit_build_tree(void)
+PyInit_tree(void)
 {
     import_array();
     return PyModule_Create(&mod_def);
