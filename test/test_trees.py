@@ -27,7 +27,7 @@ def test_fit_tree():
   assert_array_equal(tree.right_children, [2, 0, 0])
   assert_array_equal(tree.split_cols, [1, 0, 0])
   assert_array_equal(tree.split_vals, [2, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0.0, 1.0, 0.0])
+  assert_array_almost_equal(tree.node_means, [0.5, 1.0, 0.0])
 
   #   <=5
   #    |  \
@@ -53,7 +53,7 @@ def test_fit_tree():
   assert_array_equal(tree.right_children, [2, 4, 0, 0, 0])
   assert_array_equal(tree.split_cols, [0, 0, 0, 0, 0])
   assert_array_equal(tree.split_vals, [5, 2, 0, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0, 0, 100, 1.5, 8])
+  assert_array_almost_equal(tree.node_means, [322/9, 22/6, 100, 1.5, 8])
 
   # at min_leaf_size = 3, we're forced to take value 1 on the last split
   #   <=5
@@ -77,7 +77,7 @@ def test_fit_tree():
   assert_array_equal(tree.right_children, [2, 4, 0, 0, 0])
   assert_array_equal(tree.split_cols, [0, 0, 0, 0, 0])
   assert_array_equal(tree.split_vals, [5, 1, 0, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0, 0, 100, 4/3, 6])
+  assert_array_almost_equal(tree.node_means, [322/9, 22/6, 100, 4/3, 6])
 
   # at high extra leaf penalty, only the first split is worth it
   #   <=5
@@ -98,5 +98,5 @@ def test_fit_tree():
   assert_array_equal(tree.right_children, [2, 0, 0])
   assert_array_equal(tree.split_cols, [0, 0, 0])
   assert_array_equal(tree.split_vals, [5, 0, 0])
-  assert_array_almost_equal(tree.node_means, [0, 22/6, 100])
+  assert_array_almost_equal(tree.node_means, [322/9, 22/6, 100])
 
