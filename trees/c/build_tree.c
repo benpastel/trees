@@ -123,7 +123,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     while (node_count < max_nodes - 1 && done_count < node_count) {
 
         // build stats for all nodes, parellized over columns
-        // #pragma omp parallel for TODO: re-enable
+        #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
             // for each node & each unique X value, aggregate stats about y
             uint64_t counts  [node_count * vals];
@@ -135,8 +135,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             memset(sum_sqs, 0, sizeof sum_sqs);
 
             for (uint64_t r = 0; r < rows; r++) {
-                uint8_t v = X[r * cols + c];
-                int idx = memberships[r] * vals + v;
+                int idx = memberships[r] * vals + X[r * cols + c];
                 counts [idx]++;
                 sums   [idx] += y[r];
                 sum_sqs[idx] += y[r] * y[r];
