@@ -126,9 +126,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // #pragma omp parallel for TODO: re-enable
         for (uint64_t c = 0; c < cols; c++) {
             // for each node & each unique X value, aggregate stats about y
-            uint64_t counts  [node_count][vals];
-            double   sums    [node_count][vals];
-            double   sum_sqs [node_count][vals];
+            uint64_t counts  [node_count * vals];
+            double   sums    [node_count * vals];
+            double   sum_sqs [node_count * vals];
 
             memset(counts,  0, sizeof counts);
             memset(sums,    0, sizeof sums);
@@ -136,10 +136,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint64_t r = 0; r < rows; r++) {
                 uint8_t v = X[r * cols + c];
-                uint16_t n = memberships[r];
-                counts [n][v]++;
-                sums   [n][v] += y[r];
-                sum_sqs[n][v] += y[r] * y[r];
+                int idx = memberships[r] * vals + v;
+                counts [idx]++;
+                sums   [idx] += y[r];
+                sum_sqs[idx] += y[r] * y[r];
             }
 
             // for each node, decide if this column is worth splitting
@@ -157,13 +157,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // evaluate each possible splitting point
                 // splits are <= v, so the last val is invalid
                 for (int v = 0; v < vals - 1; v++) {
-                    left_count += counts[n][v];
-                    left_sum += sums[n][v];
-                    left_sum_sqs += sum_sqs[n][v];
+                    int idx = n*vals + v;
+                    left_count += counts[idx];
+                    left_sum += sums[idx];
+                    left_sum_sqs += sum_sqs[idx];
 
                     uint64_t right_count = node_counts[n] - left_count;
 
-                    if (counts[n][v] == 0 || left_count < min_leaf_size || right_count < min_leaf_size) {
+                    if (counts[idx] == 0 || left_count < min_leaf_size || right_count < min_leaf_size) {
                         // not a valid splitting point
                         continue;
                     }
@@ -232,7 +233,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         done_count = node_count;
         node_count = new_node_count;
-        for (uint16_t n = 0; n < max_nodes; n++) {;
+        for (uint16_t n = 0; n < node_count; n++) {;
             should_split[n] = false;
         }
     }
