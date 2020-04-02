@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Optional, List
 
 import numpy as np
+from scipy.stats import chi2
+
 from trees.params import Params
 from trees.tree import Tree, fit_tree, eval_tree
 from trees.c.tree import apply_bins as c_apply_bins
@@ -16,7 +18,9 @@ class Model:
 
   def __str__(self, verbose = False):
     model_type = "Regression" if self.float_targets else "Classification"
-    s = f'{model_type} model with {len(self.trees)} trees'
+    sizes = [t.node_count for t in self.trees]
+    s = (f'{model_type} model with {len(self.trees)} trees with sizes '
+      + f'min={min(sizes)} max={max(sizes)} mean={np.mean(sizes)}')
     if verbose:
       s += ':\n'
       s += '\n'.join(str(t) for t in self.trees)
@@ -87,8 +91,14 @@ def fit(
 ) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
+  assert 0 < params.confidence < 1
 
-  digitize_bins = choose_bins(X) # TODO rename
+  # TODO maybe not all of them
+  # TODO shift by 1?
+  dfs = np.arange(len(y)) + 1
+  node_size_factors = (dfs + 1) / chi2.ppf(1 - params.confidence, dfs)
+
+  digitize_bins = choose_bins(X)
   X = apply_bins(X, digitize_bins)
   assert X.dtype == np.uint8
 
@@ -101,7 +111,7 @@ def fit(
     loss_gradient = preds - y
     target = -params.learning_rate * loss_gradient
 
-    tree, new_preds = fit_tree(X, target, params)
+    tree, new_preds = fit_tree(X, target, node_size_factors, params)
     trees.append(tree)
     preds += new_preds
 
