@@ -307,13 +307,14 @@ if __name__ == '__main__':
     else:
       print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
-    with timed(f'train & predict xgboost with: {xgboost_args}...'):
+    with timed(f'train xgboost with: {xgboost_args}...'):
       if is_regression:
         model = xgb.XGBRegressor(**xgboost_args)
       else:
         model = xgb.XGBClassifier(**xgboost_args)
-
       model.fit(train_X, train_y)
+
+    with timed(f'predict xgboost...'):
       train_preds = model.predict(train_X)
       valid_preds = model.predict(valid_X)
     print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
@@ -327,7 +328,7 @@ if __name__ == '__main__':
       model = fit(train_X, train_y, tree_params)
     print(model.__str__(verbose=False))
 
-    with timed(f'predict our tree with {tree_params}...'):
+    with timed(f'predict our tree...'):
       # with profiled():
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
