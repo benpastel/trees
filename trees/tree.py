@@ -24,7 +24,7 @@ def fit_tree(
   rows, feats = X.shape
   assert X.dtype == np.uint8
   assert y.shape == (rows,)
-  assert node_size_factors.shape == (rows,)
+  assert node_size_factors.shape == (rows+1,)
   assert 0 < params.max_nodes < 2**16
   y = y.astype(np.double)
   node_size_factors = node_size_factors.astype(np.double)

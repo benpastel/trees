@@ -116,11 +116,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         root_sums += y[r];
         root_sum_sqs += y[r] * y[r];
     }
+    const double root_var = (root_sum_sqs / rows) - (root_sums / rows) * (root_sums / rows);
     node_counts[0] = rows;
     node_sums[0] = root_sums;
     node_sum_sqs[0] = root_sum_sqs;
-    // TODO
-    node_scores[0] = size_factors[rows-1] * ((root_sum_sqs / rows) - (root_sums / rows) * (root_sums / rows));
+    node_scores[0] = size_factors[rows] * root_var;
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
 
@@ -179,10 +179,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double left_var = left_sum_sqs / left_count - left_mean * left_mean;
                     double right_var = right_sum_sqs / right_count - right_mean * right_mean;
 
+                    // "smooth" each variance by adding a single datapoint from the root
+                    // TODO: if this works, simplify the math
+                    left_var = (left_var * left_count + root_var) / (left_count + 1);
+                    right_var = (right_var * right_count + root_var) / (right_count + 1);
+
                     // weighted average between (variance * size_factor) on left and right sides
                     double score = (
-                        left_var * left_count * size_factors[left_count-1] +
-                        right_var * right_count * size_factors[right_count-1]) / rows;
+                        left_var * left_count * size_factors[left_count] +
+                        right_var * right_count * size_factors[right_count]) / rows;
                     // printf("c=%d, v=%d, score=%f\n", c, v, score);
 
                     if (score < col_split_score) {
