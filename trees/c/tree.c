@@ -78,6 +78,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
     const int vals = 256;
 
+    const double smooth_factor = 10.0;
+
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
     if (memberships == NULL) {
@@ -179,16 +181,18 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double left_var = left_sum_sqs / left_count - left_mean * left_mean;
                     double right_var = right_sum_sqs / right_count - right_mean * right_mean;
 
-                    // "smooth" each variance by adding a single datapoint from the root
-                    // TODO: if this works, simplify the math
-                    left_var = (left_var * left_count + root_var) / (left_count + 1);
-                    right_var = (right_var * right_count + root_var) / (right_count + 1);
+                    // double node_var = (node_sum_sqs[n] / node_counts[n]) -
+                    //     (node_sums[n] / node_counts[n]) *
+                    //     (node_sums[n] / node_counts[n]);
+
+                    // "smooth" each variance by adding smooth_factor datapoints from root
+                    left_var = (left_var * left_count + root_var * smooth_factor) / (left_count + smooth_factor);
+                    right_var = (right_var * right_count + root_var * smooth_factor) / (right_count + smooth_factor);
 
                     // weighted average between (variance * size_factor) on left and right sides
                     double score = (
                         left_var * left_count * size_factors[left_count] +
                         right_var * right_count * size_factors[right_count]) / rows;
-                    // printf("c=%d, v=%d, score=%f\n", c, v, score);
 
                     if (score < col_split_score) {
                         col_split_score = score;

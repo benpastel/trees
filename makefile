@@ -7,8 +7,8 @@ build:
 test: build
 	python -m pytest
 
-run: test
-	python -m pytest
+run: build #test
+	#python -m pytest
 	python -m trees.benchmarks
 
 disassemble:

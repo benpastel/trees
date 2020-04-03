@@ -94,8 +94,9 @@ def fit(
   assert 0 < params.confidence < 1
 
   # TODO maybe not all of them
-  dfs = np.arange(len(y)+1) + 1
-  node_size_factors = dfs / chi2.ppf(1 - params.confidence, dfs)
+  # dfs = np.arange(len(y)+1) + 1
+  # node_size_factors = dfs / chi2.ppf(1 - params.confidence, dfs)
+  node_size_factors = np.ones(len(y)+1)
 
   digitize_bins = choose_bins(X)
   X = apply_bins(X, digitize_bins)
