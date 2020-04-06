@@ -275,20 +275,19 @@ if __name__ == '__main__':
     raise ValueError('Expected env variable TREE_COUNT')
   tree_count = int(os.environ['TREE_COUNT'])
 
-  # name => function that loads data and returns (X, y)
+  # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    'Agaricus': load_agaricus,
-    'House Prices': load_house_prices,
-    'Home Credit Default Risk': load_credit,
-    'Santander Value': load_santander,
-    'M5': load_m5,
-    # 'Grupo': load_grupo
+    'Agaricus': (load_agaricus, Params(tree_count=tree_count)),
+    'House Prices': (load_house_prices, Params(tree_count=tree_count, smooth_factor=10.0)),
+    'Home Credit Default Risk': (load_credit, Params(tree_count=tree_count, smooth_factor=0.1)),
+    'Santander Value': (load_santander, Params(tree_count=tree_count, smooth_factor=2.0)),
+    'M5': (load_m5, Params(tree_count=tree_count, smooth_factor=0.1)),
+    # 'Grupo': (load_grupo, Params(smooth_factor=0.1))
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
-  tree_params = Params(tree_count = tree_count)
 
-  for name, load_data_fn in benchmarks.items():
+  for name, (load_data_fn, tree_params) in benchmarks.items():
     print(f'\n\n{name}:\n')
 
     # split the time-series according to time
