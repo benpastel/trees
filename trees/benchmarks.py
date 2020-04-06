@@ -281,7 +281,7 @@ if __name__ == '__main__':
     'House Prices': (load_house_prices, Params(tree_count=tree_count)),
     'Home Credit Default Risk': (load_credit, Params(tree_count=tree_count, smooth_factor=0.1)),
     'Santander Value': (load_santander, Params(tree_count=tree_count)),
-    'M5': (load_m5, Params(tree_count=tree_count, smooth_factor=0.1)),
+    'M5': (load_m5, Params(tree_count=tree_count, smooth_factor=0.01)),
     # 'Grupo': (load_grupo, Params(smooth_factor=0.1))
   }
 
