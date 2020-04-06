@@ -20,23 +20,24 @@ static PyMethodDef Methods[] = {
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
-    PyObject *X_arg, *y_arg, *size_factors_arg;
+    PyObject *X_arg, *y_arg;
     PyObject *split_col_arg, *split_val_arg, *left_children_arg, *right_children_arg, *node_mean_arg;
+    double smooth_factor_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!d",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
-        &PyArray_Type, &size_factors_arg,
         &PyArray_Type, &split_col_arg,
         &PyArray_Type, &split_val_arg,
         &PyArray_Type, &left_children_arg,
         &PyArray_Type, &right_children_arg,
-        &PyArray_Type, &node_mean_arg)) return NULL;
+        &PyArray_Type, &node_mean_arg,
+        &smooth_factor_arg)) return NULL;
+    const double smooth_factor = smooth_factor_arg;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-    PyObject *size_factors_obj = PyArray_FROM_OTF(size_factors_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
     PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
@@ -45,7 +46,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     if (X_obj == NULL ||
         y_obj == NULL ||
-        size_factors_obj == NULL ||
         split_col_obj == NULL ||
         split_val_obj == NULL ||
         left_children_obj == NULL ||
@@ -54,7 +54,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(y_obj);
-        Py_XDECREF(size_factors_obj);
         Py_XDECREF(split_col_obj);
         Py_XDECREF(split_val_obj);
         Py_XDECREF(left_children_obj);
@@ -66,7 +65,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  restrict X              = PyArray_DATA((PyArrayObject *) X_obj);
     double *   restrict y              = PyArray_DATA((PyArrayObject *) y_obj);
-    double *   restrict size_factors   = PyArray_DATA((PyArrayObject *) size_factors_obj);
     uint64_t * restrict split_col      = PyArray_DATA((PyArrayObject *) split_col_obj);
     uint8_t *  restrict split_val      = PyArray_DATA((PyArrayObject *) split_val_obj);
     uint16_t * restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
@@ -77,8 +75,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
     const int vals = 256;
-
-    const double smooth_factor = 10.0;
 
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
@@ -111,7 +107,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     // find the baseline of the root
-    // accumulate in local variables so clang understands how to vectorize the loop
+    // accumulate in local variables so clang vectorizes
     double root_sums = 0.0;
     double root_sum_sqs = 0.0;
     for (uint64_t r = 0; r < rows; r++) {
@@ -122,7 +118,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_counts[0] = rows;
     node_sums[0] = root_sums;
     node_sum_sqs[0] = root_sum_sqs;
-    node_scores[0] = size_factors[rows] * root_var;
+    node_scores[0] = root_var;
+    // printf("root_var = %f\n", root_var);
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
 
@@ -167,7 +164,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                     uint64_t right_count = node_counts[n] - left_count;
 
-                    if (counts[idx] == 0 || left_count <= 1 || right_count <= 1) {
+                    if (counts[idx] == 0 || left_count < 1 || right_count < 1) {
                         // not a valid splitting point
                         continue;
                     }
@@ -181,18 +178,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double left_var = left_sum_sqs / left_count - left_mean * left_mean;
                     double right_var = right_sum_sqs / right_count - right_mean * right_mean;
 
-                    // double node_var = (node_sum_sqs[n] / node_counts[n]) -
-                    //     (node_sums[n] / node_counts[n]) *
-                    //     (node_sums[n] / node_counts[n]);
-
                     // "smooth" each variance by adding smooth_factor datapoints from root
                     left_var = (left_var * left_count + root_var * smooth_factor) / (left_count + smooth_factor);
                     right_var = (right_var * right_count + root_var * smooth_factor) / (right_count + smooth_factor);
 
-                    // weighted average between (variance * size_factor) on left and right sides
-                    double score = (
-                        left_var * left_count * size_factors[left_count] +
-                        right_var * right_count * size_factors[right_count]) / rows;
+                    // weighted average
+                    double score = (left_var * left_count + right_var * right_count) / node_counts[n];
+
+                    // printf("val = %d left_var = %f right_var = %f score = %f\n", v, left_var, right_var, score);
 
                     if (score < col_split_score) {
                         col_split_score = score;
@@ -204,8 +197,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
                 {
-                    // printf("col_split_score=%f, node_scores[n]=%f\n", col_split_score,  node_scores[n]);
-
                     if (col_split_score < node_scores[n]) {
                         node_scores[n] = col_split_score;
                         split_col[n] = c;
@@ -264,7 +255,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     free(memberships);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
-    Py_DECREF(size_factors_obj);
     Py_DECREF(split_col_obj);
     Py_DECREF(split_val_obj);
     Py_DECREF(left_children_obj);

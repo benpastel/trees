@@ -91,12 +91,6 @@ def fit(
 ) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
-  assert 0 < params.confidence < 1
-
-  # TODO maybe not all of them
-  # dfs = np.arange(len(y)+1) + 1
-  # node_size_factors = dfs / chi2.ppf(1 - params.confidence, dfs)
-  node_size_factors = np.ones(len(y)+1)
 
   digitize_bins = choose_bins(X)
   X = apply_bins(X, digitize_bins)
@@ -111,7 +105,7 @@ def fit(
     loss_gradient = preds - y
     target = -params.learning_rate * loss_gradient
 
-    tree, new_preds = fit_tree(X, target, node_size_factors, params)
+    tree, new_preds = fit_tree(X, target, params)
     trees.append(tree)
     preds += new_preds
 

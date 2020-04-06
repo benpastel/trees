@@ -18,16 +18,14 @@ class Tree:
 def fit_tree(
     X: np.ndarray,
     y: np.ndarray,
-    node_size_factors: np.ndarray,
     params: Params
 ) -> Tuple[Tree, np.ndarray]:
   rows, feats = X.shape
   assert X.dtype == np.uint8
   assert y.shape == (rows,)
-  assert node_size_factors.shape == (rows+1,)
   assert 0 < params.max_nodes < 2**16
+  assert 0 <= params.smooth_factor
   y = y.astype(np.double)
-  node_size_factors = node_size_factors.astype(np.double)
 
   # output arrays for c function
   # pre-allocated to the max number of nodes
@@ -40,12 +38,12 @@ def fit_tree(
   node_count = build_tree(
     X,
     y,
-    node_size_factors,
     split_cols,
     split_vals,
     left_children,
     right_children,
-    node_means)
+    node_means,
+    params.smooth_factor)
 
   # filter down to the number of nodes we actually used
   tree = Tree(
