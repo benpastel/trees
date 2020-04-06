@@ -115,11 +115,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         root_sum_sqs += y[r] * y[r];
     }
     const double root_var = (root_sum_sqs / rows) - (root_sums / rows) * (root_sums / rows);
+    const double penalty = root_var * smooth_factor;
     node_counts[0] = rows;
     node_sums[0] = root_sums;
     node_sum_sqs[0] = root_sum_sqs;
     node_scores[0] = root_var;
-    // printf("root_var = %f\n", root_var);
+    // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
 
@@ -149,6 +150,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double left_sum = 0.0;
                 double left_sum_sqs = 0.0;
 
+                uint64_t right_count = node_counts[n];
+                double right_sum = node_sums[n];
+                double right_sum_sqs = node_sum_sqs[n];
+
                 // track the best split in this column separately
                 // so we don't need to sync threads until the end
                 uint8_t col_split_val = 0;
@@ -158,32 +163,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // splits are <= v, so the last val is invalid
                 for (int v = 0; v < vals - 1; v++) {
                     int idx = n*vals + v;
-                    left_count += counts[idx];
-                    left_sum += sums[idx];
-                    left_sum_sqs += sum_sqs[idx];
-
-                    uint64_t right_count = node_counts[n] - left_count;
-
-                    if (counts[idx] == 0 || left_count < 1 || right_count < 1) {
-                        // not a valid splitting point
+                    if (counts[idx] == 0) {
                         continue;
                     }
 
-                    double right_sum = node_sums[n] - left_sum;
-                    double right_sum_sqs = node_sum_sqs[n] - left_sum_sqs;
+                    left_count += counts[idx];
+                    left_sum += sums[idx];
+                    left_sum_sqs += sum_sqs[idx];
+                    right_count -= counts[idx];
+                    right_sum -= sums[idx];
+                    right_sum_sqs -= sum_sqs[idx];
 
-                    double left_mean = left_sum / left_count;
-                    double right_mean = right_sum / right_count;
-
-                    double left_var = left_sum_sqs / left_count - left_mean * left_mean;
-                    double right_var = right_sum_sqs / right_count - right_mean * right_mean;
-
+                    if (right_count == 0) {
+                        break;
+                    }
                     // "smooth" each variance by adding smooth_factor datapoints from root
-                    left_var = (left_var * left_count + root_var * smooth_factor) / (left_count + smooth_factor);
-                    right_var = (right_var * right_count + root_var * smooth_factor) / (right_count + smooth_factor);
-
-                    // weighted average
-                    double score = (left_var * left_count + right_var * right_count) / node_counts[n];
+                    // and take weight average of left & right
+                    // but we can cancel some counts out, and drop some constants
+                    double left_var = left_sum_sqs - (left_sum * left_sum / left_count);
+                    double right_var = right_sum_sqs - (right_sum * right_sum / right_count);
+                    double score = (left_var + right_var + penalty) / node_counts[n];
 
                     // printf("val = %d left_var = %f right_var = %f score = %f\n", v, left_var, right_var, score);
 
