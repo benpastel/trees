@@ -129,13 +129,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint64_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
                 // for each node, for each unique X value, aggregate stats about y
-                uint64_t counts  [vals];
-                double   sums    [vals];
-                double   sum_sqs [vals];
-
-                memset(counts,  0, sizeof counts);
-                memset(sums,    0, sizeof sums);
-                memset(sum_sqs, 0, sizeof sum_sqs);
+                uint64_t counts  [vals] = {0};
+                double   sums    [vals] = {0.0};
+                double   sum_sqs [vals] = {0.0};
 
                 for (uint64_t r = 0; r < rows; r++) {
                     if (memberships[r] == n) {
