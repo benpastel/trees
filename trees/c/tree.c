@@ -78,10 +78,16 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
-    uint64_t * restrict skips = calloc(rows, sizeof(uint64_t));
-    if (memberships == NULL || skips == NULL) {
+
+    uint64_t * restrict counts = calloc(rows * vals * max_nodes, sizeof(uint64_t));
+    double * restrict sums = calloc(rows * vals * max_nodes, sizeof(double));
+    double * restrict sum_sqs = calloc(rows * vals * max_nodes, sizeof(double));
+
+    if (memberships == NULL || counts == NULL || sums == NULL || sum_sqs == NULL) {
         if (memberships != NULL) free(memberships);
-        if (skips != NULL) free(skips);
+        if (counts != NULL) free(counts);
+        if (sums != NULL) free(sums);
+        if (sum_sqs != NULL) free(sum_sqs);
         Py_DECREF(X_obj);
         Py_DECREF(y_obj);
         Py_DECREF(split_col_obj);
@@ -128,33 +134,29 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_scores[0] = root_var;
     // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
+    // TODO worry about casting
+    // TODO figure out blocks
+    // TODO try accumulators
     while (node_count < max_nodes - 1 && done_count < node_count) {
-        uint64_t first_row [node_count];
-        for (uint16_t n = done_count; n < node_count; n++) {
-            first_row[n] = rows;
-        }
-        for (uint64_t r = rows-1; r > 0; r--) {
-            skips[r] = first_row[memberships[r]] - r;
-            first_row[memberships[r]] = r;
-        }
-        skips[0] = first_row[memberships[0]];
-        first_row[memberships[0]] = 0;
 
-        #pragma omp parallel for collapse(2)
+        // build stats
+        for (uint64_t r = 0; r < rows; r++) {
+            uint16_t n = memberships[r];
+            double y_val = y[r];
+            double y_sqr = y_val * y_val;
+
+            for (uint64_t c = 0; c < cols; c++) {
+                uint8_t v = X[r * cols + c];
+                uint64_t idx = n*cols*vals + c*vals + v;
+                counts[idx]++;
+                sums[idx] += y_val;
+                sum_sqs[idx] += y_sqr;
+            }
+        }
+
+        // find splits
         for (uint64_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
-                // for each node, for each unique X value, aggregate stats about y
-                uint64_t counts  [vals] = {0};
-                double   sums    [vals] = {0.0};
-                double   sum_sqs [vals] = {0.0};
-
-                for (uint64_t r = first_row[n]; r < rows; r += skips[r]) {
-                    int idx = X[r * cols + c];
-                    counts [idx]++;
-                    sums   [idx] += y[r];
-                    sum_sqs[idx] += y[r] * y[r];
-                }
-
                 // running sums from the left side
                 uint64_t left_count = 0;
                 double left_sum = 0.0;
@@ -171,17 +173,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // evaluate each possible splitting point
                 for (int v = 0; v < vals; v++) {
-                    // int idx = n*vals + v;
-                    if (counts[v] == 0) {
+                    int idx = n*cols*vals + c*vals + v;
+                    if (counts[idx] == 0) {
                         continue;
                     }
 
-                    left_count += counts[v];
-                    left_sum += sums[v];
-                    left_sum_sqs += sum_sqs[v];
-                    right_count -= counts[v];
-                    right_sum -= sums[v];
-                    right_sum_sqs -= sum_sqs[v];
+                    left_count += counts[idx];
+                    left_sum += sums[idx];
+                    left_sum_sqs += sum_sqs[idx];
+                    right_count -= counts[idx];
+                    right_sum -= sums[idx];
+                    right_sum_sqs -= sum_sqs[idx];
 
                     if (right_count == 0) {
                         break;
@@ -201,8 +203,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     }
                 }
 
-                // TODO: also try letting each thread keep a local copy to avoid the sync
-                // (although the sync might be good because it forces everyone to iterate X at the same time?)
                 #pragma omp critical
                 {
                     if (col_split_score < node_scores[n]) {
@@ -261,7 +261,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     free(memberships);
-    free(skips);
+    free(counts);
+    free(sums);
+    free(sum_sqs);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
