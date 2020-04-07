@@ -7,6 +7,7 @@ from scipy.stats import chi2
 from trees.params import Params
 from trees.tree import Tree, fit_tree, eval_tree
 from trees.c.tree import apply_bins as c_apply_bins
+from trees.utils import timed
 
 
 @dataclass

@@ -5,7 +5,6 @@
 #include <arrayobject.h>
 #include <stdbool.h>
 #include <float.h>
-#include <omp.h>
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
@@ -110,11 +109,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double   node_sum_sqs [max_nodes];
     bool     should_split [max_nodes];
 
-    omp_lock_t locks [cols * max_nodes];
-    for (uint64_t i = 0; i < cols * max_nodes; i++) {
-        omp_init_lock(&locks[i]);
-    }
-
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
         node_counts[n] = 0;
@@ -143,9 +137,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
         // build stats
-        #pragma omp parallel for
+        #pragma omp parallel for collapse(3)
         for (uint64_t b = 0; b < blocks; b++) {
-
             for (uint64_t c = 0; c < cols; c++) {
                 for (uint64_t n = done_count; n < node_count; n++) {
                     uint64_t block_counts [vals] = {0};
@@ -160,15 +153,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             block_sum_sqs[v] += y[r] * r[y];
                         }
                     }
-
-                    omp_set_lock(&locks[c*max_nodes + n]);
                     for (int v = 0; v < vals; v++) {
                         uint64_t global_idx = n*cols*vals + c*vals + v;
                         counts[global_idx] += block_counts[v];
                         sums[global_idx] += block_sums[v];
                         sum_sqs[global_idx] += block_sum_sqs[v];
                     }
-                    omp_unset_lock(&locks[c*max_nodes + n]);
                 }
             }
         }
