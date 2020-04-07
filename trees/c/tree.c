@@ -5,6 +5,7 @@
 #include <arrayobject.h>
 #include <stdbool.h>
 #include <float.h>
+#include <omp.h>
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
@@ -109,6 +110,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double   node_sum_sqs [max_nodes];
     bool     should_split [max_nodes];
 
+    omp_lock_t locks [cols * max_nodes];
+    for (uint64_t i = 0; i < cols * max_nodes; i++) {
+        omp_init_lock(&locks[i]);
+    }
+
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
         node_counts[n] = 0;
@@ -134,59 +140,48 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
     // TODO worry about casting
-    // TODO figure out blocks
-    // TODO try accumulators
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
         // build stats
         #pragma omp parallel for
         for (uint64_t b = 0; b < blocks; b++) {
-            uint64_t block_counts [node_count * vals];
-            double block_sums [node_count * vals];
-            double block_sum_sqs [node_count * vals];
 
             for (uint64_t c = 0; c < cols; c++) {
-                for (uint64_t i = 0; i < node_count * vals; i++) {
-                    block_counts[i] = 0;
-                    block_sums[i] = 0.0;
-                    block_sum_sqs[i] = 0.0;
-                }
-
-                for (uint64_t r = b * block_size; r < (b + 1) * block_size; r++) {
-                    uint16_t n = memberships[r];
-                    uint8_t v = X[r * cols + c];
-                    uint64_t idx = n*vals + v;
-                    block_counts[idx]++;
-                    block_sums[idx] += y[r];
-                    block_sum_sqs[idx] += y[r] * r[y];
-                }
-
-                #pragma omp critical
                 for (uint64_t n = done_count; n < node_count; n++) {
+                    uint64_t block_counts [vals] = {0};
+                    double block_sums     [vals] = {0.0};
+                    double block_sum_sqs  [vals] = {0.0};
+
+                    for (uint64_t r = b * block_size; r < (b + 1) * block_size; r++) {
+                        if (memberships[r] == n) {
+                            uint8_t v = X[r * cols + c];
+                            block_counts[v]++;
+                            block_sums[v] += y[r];
+                            block_sum_sqs[v] += y[r] * r[y];
+                        }
+                    }
+
+                    omp_set_lock(&locks[c*max_nodes + n]);
                     for (int v = 0; v < vals; v++) {
                         uint64_t global_idx = n*cols*vals + c*vals + v;
-                        int local_idx = n*vals + v;
-                        counts[global_idx] += block_counts[local_idx];
-                        sums[global_idx] += block_sums[local_idx];
-                        sum_sqs[global_idx] += block_sum_sqs[local_idx];
+                        counts[global_idx] += block_counts[v];
+                        sums[global_idx] += block_sums[v];
+                        sum_sqs[global_idx] += block_sum_sqs[v];
                     }
+                    omp_unset_lock(&locks[c*max_nodes + n]);
                 }
             }
-
-
         }
         // count the remainders in a single thread
-        for (uint64_t r = blocks * block_size; r < rows; r++) {
-            uint16_t n = memberships[r];
-            double y_val = y[r];
-            double y_sqr = y_val * y_val;
-
-            for (uint64_t c = 0; c < cols; c++) {
+        #pragma omp parallel for
+        for (uint64_t c = 0; c < cols; c++) {
+            for (uint64_t r = blocks * block_size; r < rows; r++) {
+                uint16_t n = memberships[r];
                 uint8_t v = X[r * cols + c];
                 uint64_t idx = n*cols*vals + c*vals + v;
                 counts[idx]++;
-                sums[idx] += y_val;
-                sum_sqs[idx] += y_sqr;
+                sums[idx] += y[r];
+                sum_sqs[idx] += y[r] * y[r];
             }
         }
 
