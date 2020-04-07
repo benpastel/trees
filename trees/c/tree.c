@@ -79,9 +79,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
-    uint64_t * restrict counts = calloc(rows * vals * max_nodes, sizeof(uint64_t));
-    double * restrict sums = calloc(rows * vals * max_nodes, sizeof(double));
-    double * restrict sum_sqs = calloc(rows * vals * max_nodes, sizeof(double));
+    uint64_t * restrict counts = calloc(max_nodes * cols * vals, sizeof(uint64_t));
+    double * restrict sums = calloc(max_nodes * cols * vals, sizeof(double));
+    double * restrict sum_sqs = calloc(max_nodes * cols * vals, sizeof(double));
 
     if (memberships == NULL || counts == NULL || sums == NULL || sum_sqs == NULL) {
         if (memberships != NULL) free(memberships);
@@ -138,7 +138,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // TODO figure out blocks
     // TODO try accumulators
     while (node_count < max_nodes - 1 && done_count < node_count) {
-
         // build stats
         for (uint64_t r = 0; r < rows; r++) {
             uint16_t n = memberships[r];
