@@ -141,13 +141,19 @@ def load_m5():
     target_days = days - 365
     rows = items * target_days
 
+    # ordinals for the categorical variables
+    ordinals = {}
+    for c, col in enumerate(['item_id', 'dept_id', 'cat_id', 'store_id', 'state_id']):
+      _, inverse = np.unique(frame[col], return_inverse=True)
+      ordinals[c] = inverse
+
     # this axes order is efficient for writing
     # approximate with uint16 for efficiency
-    # scale floats before the uint18 truncation:
+    # scale floats before the uint16 truncation:
     #
     #   np.max(sales) == 763 so 80 is a safe scale for mean
     #   np.std is harder to predict, so use 10 to be more cautious
-    feats = 14
+    feats = 19
     X = np.zeros((target_days, feats, items), dtype=np.uint16)
     sales_T = sales.T
     for t in range(target_days):
@@ -178,6 +184,13 @@ def load_m5():
       X[t, 11] = np.mean(sales_T[d-365:d], axis=0) * 80
       X[t, 12] = np.max(sales_T[d-365:d], axis=0)
       X[t, 13] = np.std(sales_T[d-365:d], axis=0) * 10
+
+      # 5 features: ordinals for the categorical variables
+      X[t, 14] = ordinals[0]
+      X[t, 15] = ordinals[1]
+      X[t, 16] = ordinals[2]
+      X[t, 17] = ordinals[3]
+      X[t, 18] = ordinals[4]
 
     # (target_days, feats, items) => (items, target_days, feats)
     X = np.moveaxis(X, -1, 0)
