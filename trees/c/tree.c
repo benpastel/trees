@@ -74,7 +74,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
-    const int vals = 256;
+    const uint64_t vals = 256;
     const uint64_t block_size = 16384;
     const uint64_t blocks = rows / block_size;
 
@@ -137,10 +137,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
         // build stats
-        #pragma omp parallel for collapse(3)
+        #pragma omp parallel for collapse(2)
         for (uint64_t b = 0; b < blocks; b++) {
             for (uint64_t c = 0; c < cols; c++) {
-                for (uint64_t n = done_count; n < node_count; n++) {
+                for (uint16_t n = done_count; n < node_count; n++) {
                     uint64_t block_counts [vals] = {0};
                     double block_sums     [vals] = {0.0};
                     double block_sum_sqs  [vals] = {0.0};
@@ -153,7 +153,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             block_sum_sqs[v] += y[r] * r[y];
                         }
                     }
-                    for (int v = 0; v < vals; v++) {
+                    for (uint64_t v = 0; v < vals; v++) {
                         uint64_t global_idx = n*cols*vals + c*vals + v;
                         counts[global_idx] += block_counts[v];
                         sums[global_idx] += block_sums[v];
@@ -178,7 +178,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // find splits
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
-            for (uint16_t n = done_count; n < node_count; n++) {
+            for (uint64_t n = done_count; n < node_count; n++) {
                 // running sums from the left side
                 uint64_t left_count = 0;
                 double left_sum = 0.0;
@@ -194,8 +194,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double col_split_score = DBL_MAX;
 
                 // evaluate each possible splitting point
-                for (int v = 0; v < vals; v++) {
-                    int idx = n*cols*vals + c*vals + v;
+                for (uint64_t v = 0; v < vals; v++) {
+                    uint64_t idx = n*cols*vals + c*vals + v;
                     if (counts[idx] == 0) {
                         continue;
                     }
