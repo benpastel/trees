@@ -127,24 +127,25 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // build stats for all nodes, parellized over columns
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
-            // for each node & each unique X value, aggregate stats about y
-            uint64_t counts  [node_count * vals];
-            double   sums    [node_count * vals];
-            double   sum_sqs [node_count * vals];
-
-            memset(counts,  0, sizeof counts);
-            memset(sums,    0, sizeof sums);
-            memset(sum_sqs, 0, sizeof sum_sqs);
-
-            for (uint64_t r = 0; r < rows; r++) {
-                int idx = memberships[r] * vals + X[r * cols + c];
-                counts [idx]++;
-                sums   [idx] += y[r];
-                sum_sqs[idx] += y[r] * y[r];
-            }
-
-            // for each node, decide if this column is worth splitting
             for (uint16_t n = done_count; n < node_count; n++) {
+                // for each node, for each unique X value, aggregate stats about y
+                uint64_t counts  [vals];
+                double   sums    [vals];
+                double   sum_sqs [vals];
+
+                memset(counts,  0, sizeof counts);
+                memset(sums,    0, sizeof sums);
+                memset(sum_sqs, 0, sizeof sum_sqs);
+
+                for (uint64_t r = 0; r < rows; r++) {
+                    if (memberships[r] == n) {
+                        int idx = X[r * cols + c];
+                        counts [idx]++;
+                        sums   [idx] += y[r];
+                        sum_sqs[idx] += y[r] * y[r];
+                    }
+                }
+
                 // running sums from the left side
                 uint64_t left_count = 0;
                 double left_sum = 0.0;
@@ -161,17 +162,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // evaluate each possible splitting point
                 for (int v = 0; v < vals; v++) {
-                    int idx = n*vals + v;
-                    if (counts[idx] == 0) {
+                    // int idx = n*vals + v;
+                    if (counts[v] == 0) {
                         continue;
                     }
 
-                    left_count += counts[idx];
-                    left_sum += sums[idx];
-                    left_sum_sqs += sum_sqs[idx];
-                    right_count -= counts[idx];
-                    right_sum -= sums[idx];
-                    right_sum_sqs -= sum_sqs[idx];
+                    left_count += counts[v];
+                    left_sum += sums[v];
+                    left_sum_sqs += sum_sqs[v];
+                    right_count -= counts[v];
+                    right_sum -= sums[v];
+                    right_sum_sqs -= sum_sqs[v];
 
                     if (right_count == 0) {
                         break;
