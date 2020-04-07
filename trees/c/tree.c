@@ -160,8 +160,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double col_split_score = DBL_MAX;
 
                 // evaluate each possible splitting point
-                // splits are <= v, so the last val is invalid
-                for (int v = 0; v < vals - 1; v++) {
+                for (int v = 0; v < vals; v++) {
                     int idx = n*vals + v;
                     if (counts[idx] == 0) {
                         continue;
@@ -364,6 +363,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t seps = 255;
+    const uint8_t max_val = 255;
 
     // bins is a (cols, 255) array separating X into 256 values
     // for binning the data in X from float => uint8
@@ -371,8 +371,8 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     // such that (floats in bucket 0) <= bins[c, 0] < (floats in bucket 1) <= bins[c, 1] ...
     //
     // instead of searching for the first bin that a value falls into
-    // we count the number of bins that the value DOESN'T fall into - this is the same thing
-    // but easier to vectorize.
+    // we count 255 - (the number of seps the is less than);
+    // this is easier to vectorize
     //
     #pragma omp parallel for
     for (uint64_t c = 0; c < cols; c++) {
@@ -380,12 +380,11 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             float val = X[r*cols + c];
             uint8_t sum = 0; // simple accumulator so clang can vectorize
             for (uint64_t v = 0; v < seps; v++) {
-                sum += (val > bins[c*seps + v]);
+                sum += (val <= bins[c*seps + v]);
             }
-            out[r*cols + c] = sum;
+            out[r*cols + c] = max_val - sum;
         }
     }
-
     Py_DECREF(X_obj);
     Py_DECREF(bins_obj);
     Py_DECREF(out_obj);

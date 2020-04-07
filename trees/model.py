@@ -45,18 +45,23 @@ def choose_bins(
 
   if rows > SAMPLE_COUNT:
     sample = np.random.randint(rows, size=SAMPLE_COUNT, dtype=np.intp)
-    X_ordered = np.sort(X[sample, :], axis=0)
-  else:
-    X_ordered = np.sort(X, axis=0)
+    X = X[sample, :]
 
-  # to make bucket_count buckets, there are bucket_count-1 separators
-  # including both ends is bucket_count+1
-  indices = np.linspace(0, len(X_ordered), endpoint=False, num=bucket_count+1, dtype=np.intp)
+  bins = np.zeros((cols, bucket_count-1), dtype=X.dtype)
+  for c in range(cols):
+    # since splits are <= value, don't consider the highest value
+    uniqs = np.unique(X[:, c])[:-1]
 
-  # now throw away both ends and keep just the separators
-  indices = indices[1:-1]
+    if len(uniqs) < bucket_count - 1:
+      bins[c, :len(uniqs)] = uniqs
+    else:
+      # to make bucket_count buckets, there are bucket_count-1 separators
+      # including both ends is bucket_count+1
+      indices = np.linspace(0, len(uniqs), endpoint=False, num=bucket_count+1, dtype=np.intp)
 
-  bins = X_ordered[indices, :].T
+      # now throw away both ends and keep just the separators
+      indices = indices[1:-1]
+      bins[c] = uniqs[indices]
 
   assert bins.shape == (cols, bucket_count-1)
   assert bins.dtype == X.dtype
