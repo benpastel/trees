@@ -76,7 +76,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
     const int vals = 256;
-    const uint64_t block_size = 65536;
+    const uint64_t block_size = 16384;
     const uint64_t blocks = rows / block_size;
 
     // the node index each row is assigned to
@@ -172,7 +172,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
         }
-        // count the remainders in a single thread
+        // count the remainders
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
             for (uint64_t r = blocks * block_size; r < rows; r++) {
