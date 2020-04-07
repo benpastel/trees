@@ -75,6 +75,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
     const int vals = 256;
+    const uint64_t block_size = 256; // TODO much larger
+    const uint64_t blocks = rows / block_size;
 
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
@@ -97,9 +99,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_DECREF(node_mean_obj);
         return NULL;
     }
-    // for (uint64_t r = 0; r < rows; r++) {
-    //     skips[r] = 1;
-    // }
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
@@ -137,9 +136,44 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // TODO worry about casting
     // TODO figure out blocks
     // TODO try accumulators
+
     while (node_count < max_nodes - 1 && done_count < node_count) {
         // build stats
-        for (uint64_t r = 0; r < rows; r++) {
+        // #pragma omp parallel for
+        for (uint64_t b = 0; b < blocks; b++) {
+            uint64_t block_counts [node_count * cols * vals];
+            double block_sums [node_count * cols * vals];
+            double block_sum_sqs [node_count * cols * vals];
+
+            for (uint64_t i = 0; i < node_count * cols * vals; i++) {
+                block_counts[i] = 0;
+                block_sums[i] = 0.0;
+                block_sum_sqs[i] = 0.0;
+            }
+
+            for (uint64_t r = b * block_size; r < (b + 1) * block_size; r++) {
+                uint16_t n = memberships[r];
+                double y_val = y[r];
+                double y_sqr = y_val * y_val;
+
+                for (uint64_t c = 0; c < cols; c++) {
+                    uint8_t v = X[r * cols + c];
+                    uint64_t idx = n*cols*vals + c*vals + v;
+                    block_counts[idx]++;
+                    block_sums[idx] += y_val;
+                    block_sum_sqs[idx] += y_sqr;
+                }
+            }
+
+            #pragma omp critical
+            for (uint64_t i = 0; i < node_count * cols * vals; i++) {
+                counts[i] += block_counts[i];
+                sums[i] += block_sums[i];
+                sum_sqs[i] += block_sum_sqs[i];
+            }
+        }
+        // count the remainders in a single thread
+        for (uint64_t r = blocks * block_size; r < rows; r++) {
             uint16_t n = memberships[r];
             double y_val = y[r];
             double y_sqr = y_val * y_val;
@@ -154,6 +188,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
 
         // find splits
+        #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
                 // running sums from the left side
