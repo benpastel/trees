@@ -78,7 +78,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // the node index each row is assigned to
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
-    if (memberships == NULL) {
+    uint64_t * restrict skips = calloc(rows, sizeof(uint64_t));
+    if (memberships == NULL || skips == NULL) {
+        if (memberships != NULL) free(memberships);
+        if (skips != NULL) free(skips);
         Py_DECREF(X_obj);
         Py_DECREF(y_obj);
         Py_DECREF(split_col_obj);
@@ -88,6 +91,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_DECREF(node_mean_obj);
         return NULL;
     }
+    // for (uint64_t r = 0; r < rows; r++) {
+    //     skips[r] = 1;
+    // }
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
@@ -123,9 +129,18 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
     while (node_count < max_nodes - 1 && done_count < node_count) {
+        uint64_t first_row [node_count];
+        for (uint16_t n = done_count; n < node_count; n++) {
+            first_row[n] = rows;
+        }
+        for (uint64_t r = rows-1; r > 0; r--) {
+            skips[r] = first_row[memberships[r]] - r;
+            first_row[memberships[r]] = r;
+        }
+        skips[0] = first_row[memberships[0]];
+        first_row[memberships[0]] = 0;
 
-        // build stats for all nodes, parellized over columns
-        #pragma omp parallel for
+        #pragma omp parallel for collapse(2)
         for (uint64_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
                 // for each node, for each unique X value, aggregate stats about y
@@ -133,13 +148,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double   sums    [vals] = {0.0};
                 double   sum_sqs [vals] = {0.0};
 
-                for (uint64_t r = 0; r < rows; r++) {
-                    if (memberships[r] == n) {
-                        int idx = X[r * cols + c];
-                        counts [idx]++;
-                        sums   [idx] += y[r];
-                        sum_sqs[idx] += y[r] * y[r];
-                    }
+                for (uint64_t r = first_row[n]; r < rows; r += skips[r]) {
+                    int idx = X[r * cols + c];
+                    counts [idx]++;
+                    sums   [idx] += y[r];
+                    sum_sqs[idx] += y[r] * y[r];
                 }
 
                 // running sums from the left side
@@ -220,7 +233,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
         }
 
-        // update row membership & stats in the nodes that split
+
         for (uint64_t r = 0; r < rows; r++) {
             uint16_t old_n = memberships[r];
             if (should_split[old_n]) {
@@ -248,6 +261,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     free(memberships);
+    free(skips);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
