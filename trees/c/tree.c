@@ -21,17 +21,20 @@ static PyMethodDef Methods[] = {
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg, *y_arg;
-    PyObject *split_col_arg, *split_val_arg, *left_children_arg, *right_children_arg, *node_mean_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     double smooth_factor_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!d",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!d",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
-        &PyArray_Type, &split_val_arg,
-        &PyArray_Type, &left_children_arg,
-        &PyArray_Type, &right_children_arg,
+        &PyArray_Type, &split_lo_arg,
+        &PyArray_Type, &split_hi_arg,
+        &PyArray_Type, &left_childs_arg,
+        &PyArray_Type, &mid_childs_arg,
+        &PyArray_Type, &right_childs_arg,
         &PyArray_Type, &node_mean_arg,
         &smooth_factor_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
@@ -39,41 +42,49 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
-    PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
-    PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *right_children_obj = PyArray_FROM_OTF(right_children_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
+    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
+    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
+    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
+    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
+    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         y_obj == NULL ||
         split_col_obj == NULL ||
-        split_val_obj == NULL ||
-        left_children_obj == NULL ||
-        right_children_obj == NULL ||
+        split_lo_obj == NULL ||
+        split_hi_obj == NULL ||
+        left_childs_obj == NULL ||
+        mid_childs_obj == NULL ||
+        right_childs_obj == NULL ||
         node_mean_obj == NULL)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(y_obj);
         Py_XDECREF(split_col_obj);
-        Py_XDECREF(split_val_obj);
-        Py_XDECREF(left_children_obj);
-        Py_XDECREF(right_children_obj);
+        Py_XDECREF(split_lo_obj);
+        Py_XDECREF(split_hi_obj);
+        Py_XDECREF(left_childs_obj);
+        Py_XDECREF(mid_childs_obj);
+        Py_XDECREF(right_childs_obj);
         Py_XDECREF(node_mean_obj);
         return NULL;
     }
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X              = PyArray_DATA((PyArrayObject *) X_obj);
-    double *   restrict y              = PyArray_DATA((PyArrayObject *) y_obj);
-    uint64_t * restrict split_col      = PyArray_DATA((PyArrayObject *) split_col_obj);
-    uint8_t *  restrict split_val      = PyArray_DATA((PyArrayObject *) split_val_obj);
-    uint16_t * restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
-    uint16_t * restrict right_children = PyArray_DATA((PyArrayObject *) right_children_obj);
-    double *   restrict node_means     = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    double *   restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
+    uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
+    uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
+    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
+    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_children_obj, 0);
+    const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
     const uint64_t vals = 256;
     const uint64_t block_size = 16384;
     const uint64_t blocks = rows / block_size;
@@ -93,9 +104,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_DECREF(X_obj);
         Py_DECREF(y_obj);
         Py_DECREF(split_col_obj);
-        Py_DECREF(split_val_obj);
-        Py_DECREF(left_children_obj);
-        Py_DECREF(right_children_obj);
+        Py_DECREF(split_lo_obj);
+        Py_DECREF(split_hi_obj);
+        Py_DECREF(left_childs_obj);
+        Py_DECREF(mid_childs_obj);
+        Py_DECREF(right_childs_obj);
         Py_DECREF(node_mean_obj);
         return NULL;
     }
@@ -133,7 +146,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_scores[0] = root_var;
     // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
-    while (node_count < max_nodes - 1 && done_count < node_count) {
+    while (node_count < max_nodes - 2 && done_count < node_count) {
         // build stats
         #pragma omp parallel for collapse(2)
         for (uint64_t b = 0; b < blocks; b++) {
@@ -182,44 +195,52 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double left_sum = 0.0;
                 double left_sum_sqs = 0.0;
 
-                uint64_t right_count = node_counts[n];
-                double right_sum = node_sums[n];
-                double right_sum_sqs = node_sum_sqs[n];
-
                 // track the best split in this column separately
                 // so we don't need to sync threads until the end
-                uint8_t col_split_val = 0;
+                uint8_t col_split_lo = 0;
+                uint8_t col_split_hi = 0;
                 double col_split_score = DBL_MAX;
 
                 // evaluate each possible splitting point
-                for (uint64_t v = 0; v < vals; v++) {
-                    uint64_t idx = n*cols*vals + c*vals + v;
-                    if (counts[idx] == 0) {
-                        continue;
-                    }
+                for (uint64_t lo = 0; lo < vals - 1; lo++) {
+                    uint64_t lo_i = n*cols*vals + c*vals + lo;
+                    if (counts[lo_i] == 0) continue;
 
-                    left_count += counts[idx];
-                    left_sum += sums[idx];
-                    left_sum_sqs += sum_sqs[idx];
-                    right_count -= counts[idx];
-                    right_sum -= sums[idx];
-                    right_sum_sqs -= sum_sqs[idx];
+                    left_count += counts[lo_i];
+                    left_sum += sums[lo_i];
+                    left_sum_sqs += sum_sqs[lo_i];
 
-                    if (right_count == 0) {
-                        break;
-                    }
-                    // "smooth" each variance by adding smooth_factor datapoints from root
-                    // and take weight average of left & right
-                    // but we can cancel some counts out, and drop some constants
-                    double left_var = left_sum_sqs - (left_sum * left_sum / left_count);
-                    double right_var = right_sum_sqs - (right_sum * right_sum / right_count);
-                    double score = (left_var + right_var + penalty) / node_counts[n];
+                    uint64_t mid_count = 0;
+                    double mid_sum = 0.0;
+                    double mid_sum_sqs = 0.0;
 
-                    // printf("val = %d left_var = %f right_var = %f score = %f\n", v, left_var, right_var, score);
+                    for (uint64_t hi = lo + 1; hi < vals; hi++) {
+                        uint64_t hi_i = n*cols*vals + c*vals + hi;
+                        mid_count += counts[hi_i];
+                        mid_sum += sums[hi_i];
+                        mid_sum_sqs += sum_sqs[hi_i];
 
-                    if (score < col_split_score) {
-                        col_split_score = score;
-                        col_split_val = v;
+                        uint64_t right_count = node_counts[n] - left_count - mid_count;
+                        double right_sum = node_sums[n] - left_sum - mid_sum;
+                        double right_sum_sqs = node_sum_sqs[n] - left_sum_sqs - mid_sum_sqs;
+
+                        if (right_count == 0) break;
+                        if (counts[hi_i] == 0) continue;
+
+                        // TODO try form that penalizes small splits more
+                        // "smooth" each variance by adding smooth_factor datapoints from root
+                        // and take weight average of left & right
+                        // but we can cancel some counts out, and drop some constants
+                        double left_var = left_sum_sqs - (left_sum * left_sum / left_count);
+                        double mid_var = mid_sum_sqs - (mid_sum * mid_sum / mid_count);
+                        double right_var = right_sum_sqs - (right_sum * right_sum / right_count);
+                        double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
+                        if (score < col_split_score) {
+                            col_split_score = score;
+                            col_split_lo = lo;
+                            col_split_hi = hi;
+                        }
+                        // printf("    split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", lo, hi, left_var, mid_var, right_var, score);
                     }
                 }
 
@@ -228,7 +249,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     if (col_split_score < node_scores[n]) {
                         node_scores[n] = col_split_score;
                         split_col[n] = c;
-                        split_val[n] = col_split_val;
+                        split_lo[n] = col_split_lo;
+                        split_hi[n] = col_split_hi;
                         should_split[n] = true;
                     }
 
@@ -240,13 +262,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // update node metadata for new splits
         int new_node_count = node_count;
         for (uint16_t n = 0; n < node_count; n++) {
-            if (should_split[n] && new_node_count <= max_nodes - 2) {
+            if (should_split[n] && new_node_count <= max_nodes - 3) {
                 // make the split
-                left_children[n] = new_node_count;
-                right_children[n] = new_node_count + 1;
-                node_scores[left_children[n]] = node_scores[n];
-                node_scores[right_children[n]] = node_scores[n];
-                new_node_count += 2;
+                left_childs[n] = new_node_count;
+                mid_childs[n] = new_node_count + 1;
+                right_childs[n] = new_node_count + 2;
+                node_scores[left_childs[n]] = node_scores[n];
+                node_scores[mid_childs[n]] = node_scores[n];
+                node_scores[right_childs[n]] = node_scores[n];
+                new_node_count += 3;
             } else if (should_split[n]) {
                 // no room; abort the split
                 should_split[n] = false;
@@ -258,7 +282,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             uint16_t old_n = memberships[r];
             if (should_split[old_n]) {
                 uint8_t val = X[r * cols + split_col[old_n]];
-                uint16_t n = (val <= split_val[old_n]) ? left_children[old_n] : right_children[old_n];
+                uint16_t n = (val <= split_lo[old_n]) ? left_childs[old_n] :
+                             (val <= split_hi[old_n]) ? mid_childs[old_n] :
+                             right_childs[old_n];
                 memberships[r] = n;
                 node_counts[n]++;
                 node_sums[n] += y[r];
@@ -287,9 +313,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
-    Py_DECREF(split_val_obj);
-    Py_DECREF(left_children_obj);
-    Py_DECREF(right_children_obj);
+    Py_DECREF(split_lo_obj);
+    Py_DECREF(split_hi_obj);
+    Py_DECREF(left_childs_obj);
+    Py_DECREF(mid_childs_obj);
+    Py_DECREF(right_childs_obj);
     Py_DECREF(node_mean_obj);
     return Py_BuildValue("i", node_count);
 }
@@ -297,53 +325,65 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
-    PyObject *X_arg, *split_col_arg, *split_val_arg, *left_children_arg, *right_children_arg, *node_mean_arg;
+    PyObject *X_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *out_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &split_col_arg,
-        &PyArray_Type, &split_val_arg,
-        &PyArray_Type, &left_children_arg,
-        &PyArray_Type, &right_children_arg,
+        &PyArray_Type, &split_lo_arg,
+        &PyArray_Type, &split_hi_arg,
+        &PyArray_Type, &left_childs_arg,
+        &PyArray_Type, &mid_childs_arg,
+        &PyArray_Type, &right_childs_arg,
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *right_children_obj = PyArray_FROM_OTF(right_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         split_col_obj == NULL ||
-        split_val_obj == NULL ||
-        left_children_obj == NULL ||
-        right_children_obj == NULL ||
+        split_lo_obj == NULL ||
+        split_hi_obj == NULL ||
+        left_childs_obj == NULL ||
+        mid_childs_obj == NULL ||
+        right_childs_obj == NULL ||
         node_mean_obj == NULL ||
         out_obj == NULL)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(split_col_obj);
-        Py_XDECREF(split_val_obj);
-        Py_XDECREF(left_children_obj);
-        Py_XDECREF(right_children_obj);
+        Py_XDECREF(split_lo_obj);
+        Py_XDECREF(split_hi_obj);
+        Py_XDECREF(left_childs_obj);
+        Py_XDECREF(mid_childs_obj);
+        Py_XDECREF(right_childs_obj);
         Py_XDECREF(node_mean_obj);
         Py_XDECREF(out_obj);
         return NULL;
     }
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X              = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * restrict split_col      = PyArray_DATA((PyArrayObject *) split_col_obj);
-    uint8_t *  restrict split_val      = PyArray_DATA((PyArrayObject *) split_val_obj);
-    uint16_t * restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
-    uint16_t * restrict right_children = PyArray_DATA((PyArrayObject *) right_children_obj);
-    double *   restrict node_means     = PyArray_DATA((PyArrayObject *) node_mean_obj);
-    double *   restrict out            = PyArray_DATA((PyArrayObject *) out_obj);
+    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
+    uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
+    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
+    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
@@ -352,17 +392,21 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
         uint16_t left;
-        while ((left = left_children[n])) {
+        while ((left = left_childs[n])) {
             uint8_t val = X[r*cols + split_col[n]];
-            n = (val <= split_val[n]) ? left : right_children[n];
+            n = (val <= split_lo[n]) ? left :
+                (val <= split_hi[n]) ? mid_childs[n] :
+                right_childs[n];
         }
         out[r] = node_means[n];
     }
     Py_DECREF(X_obj);
     Py_DECREF(split_col_obj);
-    Py_DECREF(split_val_obj);
-    Py_DECREF(left_children_obj);
-    Py_DECREF(right_children_obj);
+    Py_DECREF(split_lo_obj);
+    Py_DECREF(split_hi_obj);
+    Py_DECREF(left_childs_obj);
+    Py_DECREF(mid_childs_obj);
+    Py_DECREF(right_childs_obj);
     Py_DECREF(node_mean_obj);
     Py_DECREF(out_obj);
     Py_RETURN_NONE;

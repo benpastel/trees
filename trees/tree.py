@@ -10,8 +10,10 @@ from trees.c.tree import build_tree, eval_tree as c_eval_tree
 class Tree:
   node_count: int
   split_cols: np.ndarray
-  split_vals: np.ndarray
+  split_lo_vals: np.ndarray
+  split_hi_vals: np.ndarray
   left_children: np.ndarray
+  mid_children: np.ndarray
   right_children: np.ndarray
   node_means: np.ndarray
 
@@ -30,8 +32,10 @@ def fit_tree(
   # output arrays for c function
   # pre-allocated to the max number of nodes
   split_cols = np.zeros((params.max_nodes,), dtype=np.uint64)
-  split_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
+  split_lo_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
+  split_hi_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
   left_children = np.zeros((params.max_nodes,), dtype=np.uint16)
+  mid_children = np.zeros((params.max_nodes,), dtype=np.uint16)
   right_children = np.zeros((params.max_nodes,), dtype=np.uint16)
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
@@ -39,8 +43,10 @@ def fit_tree(
     X,
     y,
     split_cols,
-    split_vals,
+    split_lo_vals,
+    split_hi_vals,
     left_children,
+    mid_children,
     right_children,
     node_means,
     params.smooth_factor)
@@ -49,8 +55,10 @@ def fit_tree(
   tree = Tree(
     node_count,
     split_cols[:node_count],
-    split_vals[:node_count],
+    split_lo_vals[:node_count],
+    split_hi_vals[:node_count],
     left_children[:node_count],
+    mid_children[:node_count],
     right_children[:node_count],
     node_means[:node_count]
   )
@@ -67,8 +75,10 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
   c_eval_tree(
     X,
     tree.split_cols,
-    tree.split_vals,
+    tree.split_lo_vals,
+    tree.split_hi_vals,
     tree.left_children,
+    tree.mid_children,
     tree.right_children,
     tree.node_means,
     values)
