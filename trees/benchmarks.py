@@ -290,11 +290,11 @@ if __name__ == '__main__':
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    'Agaricus': (load_agaricus, Params(tree_count=tree_count, max_nodes=32)),
+    'Agaricus': (load_agaricus, Params(tree_count=tree_count)),
     'House Prices': (load_house_prices, Params(tree_count=tree_count)),
     'Home Credit Default Risk': (load_credit, Params(tree_count=tree_count, smooth_factor=0.1)),
     'Santander Value': (load_santander, Params(tree_count=tree_count)),
-    'M5': (load_m5, Params(tree_count=tree_count, smooth_factor=0.01)),
+    'M5': (load_m5, Params(tree_count=tree_count, smooth_factor=0.1)),
     # 'Grupo': (load_grupo, Params(smooth_factor=0.1))
   }
 

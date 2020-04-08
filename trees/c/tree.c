@@ -133,8 +133,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_scores[0] = root_var;
     // printf("root_var = %f, penalty = %f\n", root_var, penalty);
 
-    // TODO worry about casting
-
     while (node_count < max_nodes - 1 && done_count < node_count) {
         // build stats
         #pragma omp parallel for collapse(2)
