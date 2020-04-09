@@ -199,21 +199,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         double right_var = right_sum_sqs - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
 
-                        omp_set_lock(&node_locks[n]);
+                        // node_scores[n] may be stale, but it only decreases
+                        // first check without the lock for efficiency
                         if (score < node_scores[n]) {
-                            node_scores[n] = score;
-                            split_col[n] = c;
-                            split_lo[n] = lo;
-                            split_hi[n] = hi;
-                            left_counts[n] = left_count;
-                            mid_counts[n] = mid_count;
-                            right_counts[n] = right_count;
-                            left_vars[n] = left_var;
-                            mid_vars[n] = mid_var;
-                            right_vars[n] = right_var;
-                            should_split[n] = true;
+                            // now check with the lock for correctness
+                            omp_set_lock(&node_locks[n]);
+                            if (score < node_scores[n]) {
+                                node_scores[n] = score;
+                                split_col[n] = c;
+                                split_lo[n] = lo;
+                                split_hi[n] = hi;
+                                left_counts[n] = left_count;
+                                mid_counts[n] = mid_count;
+                                right_counts[n] = right_count;
+                                left_vars[n] = left_var;
+                                mid_vars[n] = mid_var;
+                                right_vars[n] = right_var;
+                                should_split[n] = true;
+                            }
+                            omp_unset_lock(&node_locks[n]);
                         }
-                        omp_unset_lock(&node_locks[n]);
                         // printf("    split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", lo, hi, left_var, mid_var, right_var, score);
                     }
                 }
@@ -308,6 +313,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         if (node_counts[n] > 0) {
             node_means[n] = node_sums[n] / node_counts[n];
         }
+        omp_destroy_lock(&node_locks[n]);
     }
     free(X);
     free(y);
