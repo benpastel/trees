@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <float.h>
 #include <time.h>
+#include <omp.h>
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
@@ -105,10 +106,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double   node_sums    [max_nodes];
     double   node_sum_sqs [max_nodes];
     bool     should_split [max_nodes];
+    omp_lock_t node_locks [max_nodes];
 
     uint64_t left_counts [max_nodes];
     uint64_t mid_counts  [max_nodes];
     uint64_t right_counts[max_nodes];
+
+    double left_vars  [max_nodes];
+    double mid_vars   [max_nodes];
+    double right_vars [max_nodes];
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_starts[n] = 0;
@@ -120,6 +126,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         left_counts[n] = 0;
         mid_counts[n] = 0;
         right_counts[n] = 0;
+        omp_init_lock(&node_locks[n]);
     }
 
     // find the baseline of the root
@@ -191,6 +198,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         double mid_var = mid_sum_sqs - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sqs - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
+
+                        omp_set_lock(&node_locks[n]);
                         if (score < node_scores[n]) {
                             node_scores[n] = score;
                             split_col[n] = c;
@@ -199,8 +208,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             left_counts[n] = left_count;
                             mid_counts[n] = mid_count;
                             right_counts[n] = right_count;
+                            left_vars[n] = left_var;
+                            mid_vars[n] = mid_var;
+                            right_vars[n] = right_var;
                             should_split[n] = true;
                         }
+                        omp_unset_lock(&node_locks[n]);
                         // printf("    split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", lo, hi, left_var, mid_var, right_var, score);
                     }
                 }
@@ -219,9 +232,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // TODO this isn't actually the right score
                 // need to track this properly OR recalc baseline each time
-                node_scores[left_childs[n]] = node_scores[n];
-                node_scores[mid_childs[n]] = node_scores[n];
-                node_scores[right_childs[n]] = node_scores[n];
+                node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
+                node_scores[mid_childs[n]] = mid_vars[n] / mid_counts[n];
+                node_scores[right_childs[n]] = right_vars[n] / right_counts[n];
 
                 node_counts[left_childs[n]] = left_counts[n];
                 node_counts[mid_childs[n]] = mid_counts[n];
