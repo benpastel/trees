@@ -141,7 +141,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     uint8_t v = X[r * cols + c];
                     counts[v]++;
                     sums[v] += y[r];
-                    sum_sqs[v] += y[r] * r[y];
+                    sum_sqs[v] += y[r] * y[r];
                 }
 
                 // find splits
