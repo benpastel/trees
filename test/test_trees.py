@@ -28,8 +28,8 @@ def test_fit_tree():
     [4, 0],
     [5, 5],
   ], dtype=np.uint8)
-  y = np.array([2, 1, 0, 2, 1, 0])
-  tree, preds = fit_tree(
+  y = np.array([2, 1, 0, 2, 1, 0], dtype=np.double)
+  tree = fit_tree(
     X,
     y,
     Params()
@@ -52,8 +52,8 @@ def test_fit_tree():
   # [0,2,2,3]   [9,7]  [100,100,100]
   #
   X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
-  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100])
-  tree, preds = fit_tree(
+  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  tree = fit_tree(
     X,
     y,
     Params(smooth_factor=1.0)
@@ -77,8 +77,8 @@ def test_fit_tree():
   #  [0] [2,2] [3]
   #
   X = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.uint8).reshape((-1, 1))
-  y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20])
-  tree, preds = fit_tree(
+  y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.double)
+  tree = fit_tree(
     X,
     y,
     Params(smooth_factor=0.0)
