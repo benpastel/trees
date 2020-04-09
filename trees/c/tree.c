@@ -137,7 +137,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_sum_sqs[0] = root_sum_sqs;
     node_scores[0] = root_var;
 
-    time_t start = time(NULL);
+    // time_t start = time(NULL);
     while (node_count < max_nodes - 2 && done_count < node_count) {
         #pragma omp parallel for collapse(2)
         for (uint16_t n = done_count; n < node_count; n++) {
@@ -245,11 +245,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             // first copy X and y into temp buffers
             // TODO handle NULL
-            uint8_t * restrict X_tmp = malloc(node_counts[n] * cols * sizeof(uint8_t));
-            memcpy(X_tmp, &X[node_starts[n]*cols], node_counts[n] * cols * sizeof(uint8_t));
+            uint8_t * restrict X_buf = malloc(node_counts[n] * cols * sizeof(uint8_t));
+            memcpy(X_buf, &X[node_starts[n]*cols], node_counts[n] * cols * sizeof(uint8_t));
 
-            double * restrict y_tmp = malloc(node_counts[n] * sizeof(double));
-            memcpy(y_tmp, &y[node_starts[n]], node_counts[n] * sizeof(double));
+            double * restrict y_buf = malloc(node_counts[n] * sizeof(double));
+            memcpy(y_buf, &y[node_starts[n]], node_counts[n] * sizeof(double));
 
             uint64_t left_r = node_starts[left_childs[n]];
             uint64_t mid_r = node_starts[mid_childs[n]];
@@ -257,7 +257,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint64_t i = 0; i < node_counts[n]; i++) {
                 // copy row i from tmp into the correct node's region of X and y
-                uint8_t val = X_tmp[i * cols + split_col[n]];
+                uint8_t val = X_buf[i * cols + split_col[n]];
 
                 uint16_t child;
                 uint64_t r;
@@ -271,15 +271,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     child = right_childs[n];
                     r = right_r++;
                 }
-                memcpy(&X[r*cols], &X_tmp[i*cols], cols * sizeof(uint8_t));
-                y[r] = y_tmp[i];
+                memcpy(&X[r*cols], &X_buf[i*cols], cols * sizeof(uint8_t));
+                y[r] = y_buf[i];
 
                 // TODO track these from the split
-                node_sums[child] += y_tmp[i];
-                node_sum_sqs[child] += y_tmp[i] * y_tmp[i];
+                node_sums[child] += y_buf[i];
+                node_sum_sqs[child] += y_buf[i] * y_buf[i];
             }
-            free(X_tmp);
-            free(y_tmp);
+            free(X_buf);
+            free(y_buf);
         }
 
         done_count = node_count;
@@ -288,7 +288,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             should_split[n] = false;
         }
     }
-    printf("%ld seconds\n", time(NULL) - start);
+    // printf("%ld seconds\n", time(NULL) - start);
 
     // finally, calculate the mean at each leaf node
     for (uint16_t n = 0; n < node_count; n++) {
