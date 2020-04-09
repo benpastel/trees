@@ -18,14 +18,14 @@ class Tree:
   node_means: np.ndarray
 
 def fit_tree(
-    X_mut: np.ndarray,
-    y_mut: np.ndarray,
+    X: np.ndarray,
+    y: np.ndarray,
     params: Params
 ) -> Tuple[Tree, np.ndarray]:
-  rows, feats = X_mut.shape
-  assert X_mut.dtype == np.uint8
-  assert y_mut.dtype == np.double
-  assert y_mut.shape == (rows,)
+  rows, feats = X.shape
+  assert X.dtype == np.uint8
+  assert y.dtype == np.double
+  assert y.shape == (rows,)
   assert 0 < params.max_nodes < 2**16
   assert 0 <= params.smooth_factor
 
@@ -40,8 +40,8 @@ def fit_tree(
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
   node_count = build_tree(
-    X_mut,
-    y_mut,
+    X,
+    y,
     split_cols,
     split_lo_vals,
     split_hi_vals,

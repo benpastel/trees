@@ -103,22 +103,18 @@ def fit(
   assert X.dtype == np.uint8
 
   float_targets = (y.dtype != np.bool)
+  y = y.astype(np.double, copy=False)
 
   preds = np.mean(y)
 
-  # copy for mutating during fit_tree
-  X_mut = X.copy()
-
   trees = []
   for t in range(params.tree_count):
-    loss_gradient = preds - y
-    target = -params.learning_rate * loss_gradient
+    target = params.learning_rate * (y - preds)
 
-    tree = fit_tree(X_mut, target, params)
+    tree = fit_tree(X, target, params)
     trees.append(tree)
 
     new_preds = eval_tree(tree, X)
-
     preds += new_preds
 
   return Model(trees, digitize_bins, float_targets, np.mean(y))
