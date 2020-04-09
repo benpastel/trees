@@ -129,6 +129,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_scores[0] = root_var;
 
     while (node_count < max_nodes - 2 && done_count < node_count) {
+        #pragma omp parallel for collapse(2)
         for (uint16_t n = done_count; n < node_count; n++) {
             for (uint64_t c = 0; c < cols; c++) {
                 // build stats
@@ -253,6 +254,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
 
         // swap data around so it's sequential for each node
+        #pragma omp parallel for
         for (uint16_t n = done_count; n < node_count; n++) {
             if (!should_split[n]) continue;
 
@@ -297,7 +299,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // TODO track these from the split
                 node_sums[child] += y_tmp[i];
-                node_sum_sqs[child] +=  y_tmp[i] *  y_tmp[i];
+                node_sum_sqs[child] += y_tmp[i] * y_tmp[i];
             }
             free(X_tmp);
             free(y_tmp);
@@ -309,7 +311,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             should_split[n] = false;
         }
     }
-
     // finally, calculate the mean at each leaf node
     for (uint16_t n = 0; n < node_count; n++) {
         if (node_counts[n] > 0) {
