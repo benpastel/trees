@@ -105,6 +105,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double * restrict y2 = malloc(rows * sizeof(double));
     memcpy(y, y_orig, rows * sizeof(double));
 
+    uint64_t * restrict counts = calloc(max_nodes * cols * vals, sizeof(uint64_t));
+    double * restrict sums = calloc(max_nodes * cols * vals, sizeof(double));
+    double * restrict sum_sqs = calloc(max_nodes * cols * vals, sizeof(double));
+
     uint16_t node_count = 1;
     uint16_t done_count = 0;
 
@@ -157,11 +161,27 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     struct timeval stat_start;
     struct timeval split_start;
     struct timeval split_end;
+    struct timeval init_end;
     long stat_ms = 0;
     long split_ms = 0;
     int loops = 0;
 
     gettimeofday(&total_start, NULL);
+
+    for (uint64_t r = 0; r < rows; r++) {
+        double y_val = y[r];
+        double sq = y_val * y_val;
+
+        for (uint64_t c = 0; c < cols; c++) {
+            uint8_t v = X[r * cols + c];
+            uint64_t i = c*vals + v;
+            counts[i]++;
+            sums[i] += y_val;
+            sum_sqs[i] += sq;
+        }
+    }
+    gettimeofday(&init_end, NULL);
+
     while (node_count < max_nodes - 2 && done_count < node_count) {
         loops++;
 
@@ -170,19 +190,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         #pragma omp parallel for collapse(2)
         for (uint16_t n = done_count; n < node_count; n++) {
             for (uint64_t c = 0; c < cols; c++) {
-                // build stats
-                uint64_t counts  [vals] = {0};
-                double   sums    [vals] = {0.0};
-                double   sum_sqs [vals] = {0.0};
-
-                uint64_t stop_row = node_starts[n] + node_counts[n];
-                for (uint64_t r = node_starts[n]; r < stop_row; r++) {
-                    uint8_t v = X[r * cols + c];
-                    counts[v]++;
-                    sums[v] += y[r];
-                    sum_sqs[v] += y[r] * y[r];
-                }
-
                 // find splits
 
                 // running sums from the left side
@@ -192,27 +199,31 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // evaluate each possible splitting point
                 for (uint64_t lo = 0; lo < vals - 1; lo++) {
-                    if (counts[lo] == 0) continue;
+                   uint64_t lo_i = n * cols * vals + c * vals + lo;
 
-                    left_count += counts[lo];
-                    left_sum += sums[lo];
-                    left_sum_sqs += sum_sqs[lo];
+                    if (counts[lo_i] == 0) continue;
+
+                    left_count += counts[lo_i];
+                    left_sum += sums[lo_i];
+                    left_sum_sqs += sum_sqs[lo_i];
 
                     uint64_t mid_count = 0;
                     double mid_sum = 0.0;
                     double mid_sum_sqs = 0.0;
 
                     for (uint64_t hi = lo + 1; hi < vals; hi++) {
-                        mid_count += counts[hi];
-                        mid_sum += sums[hi];
-                        mid_sum_sqs += sum_sqs[hi];
+                        uint64_t hi_i = n * cols * vals + c * vals + hi;
+
+                        mid_count += counts[hi_i];
+                        mid_sum += sums[hi_i];
+                        mid_sum_sqs += sum_sqs[hi_i];
 
                         uint64_t right_count = node_counts[n] - left_count - mid_count;
                         double right_sum = node_sums[n] - left_sum - mid_sum;
                         double right_sum_sqs = node_sum_sqs[n] - left_sum_sqs - mid_sum_sqs;
 
                         if (right_count == 0) break;
-                        if (counts[hi] == 0) continue;
+                        if (counts[hi_i] == 0) continue;
 
                         // weighted average of splits' variance
                         double left_var = left_sum_sqs - (left_sum * left_sum / left_count);
@@ -290,22 +301,32 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint64_t src_r = node_starts[n]; src_r < node_starts[n] + node_counts[n]; src_r++) {
                 // copy row i from tmp into the correct node's region of X and y
-                uint8_t val = X[src_r * cols + split_col[n]];
+                uint8_t split_v = X[src_r * cols + split_col[n]];
 
                 uint16_t child;
                 uint64_t dest_r;
-                if (val <= split_lo[n]) {
+                if (split_v <= split_lo[n]) {
                     child = left_childs[n];
                     dest_r = left_r++;
-                } else if (val <= split_hi[n]) {
+                } else if (split_v <= split_hi[n]) {
                     child = mid_childs[n];
                     dest_r = mid_r++;
                 } else {
                     child = right_childs[n];
                     dest_r = right_r++;
                 }
-                memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
-                y2[dest_r] = y[src_r];
+                double src_y = y[src_r];
+                y2[dest_r] = src_y;
+                for (uint64_t c = 0; c < cols; c++) {
+                    uint8_t src_v = X[src_r*cols + c];
+                    X2[dest_r*cols + c] = src_v;
+
+                    uint64_t i = child * cols * vals + c * vals + src_v;
+                    counts[i]++;
+                    sums[i] += src_y;
+                    sum_sqs[i] += src_y * src_y;
+                }
+                // memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
 
                 // TODO track these from the split
                 node_sums[child] += y[src_r];
@@ -330,10 +351,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     }
     gettimeofday(&total_end, NULL);
-    printf("%d loops / %d nodes: %.1f total, %.1f stats, %.1f splits\n",
+    printf("%d loops / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits\n",
         loops,
         node_count,
         ((float) msec(total_start, total_end)) / 1000.0,
+        ((float) msec(total_start, init_end)) / 1000.0,
         ((float) stat_ms) / 1000.0,
         ((float) split_ms) / 1000.0);
 
@@ -344,6 +366,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
         omp_destroy_lock(&node_locks[n]);
     }
+    free(counts); free(sums); free(sum_sqs);
     free(X); free(X2);
     free(y); free(y2);
     Py_DECREF(X_obj);
