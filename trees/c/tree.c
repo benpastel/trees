@@ -319,14 +319,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 y2[dest_r] = src_y;
                 for (uint64_t c = 0; c < cols; c++) {
                     uint8_t src_v = X[src_r*cols + c];
-                    X2[dest_r*cols + c] = src_v;
+                    // X2[dest_r*cols + c] = src_v;
 
                     uint64_t i = child * cols * vals + c * vals + src_v;
                     counts[i]++;
                     sums[i] += src_y;
                     sum_sqs[i] += src_y * src_y;
                 }
-                // memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
+                memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
 
                 // TODO track these from the split
                 node_sums[child] += y[src_r];
