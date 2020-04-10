@@ -5,7 +5,8 @@
 #include <arrayobject.h>
 #include <stdbool.h>
 #include <float.h>
-#include <time.h>
+// #include <time.h>
+#include <sys/time.h>
 #include <omp.h>
 
 static PyObject* build_tree(PyObject *self, PyObject *args);
@@ -18,6 +19,11 @@ static PyMethodDef Methods[] = {
     {"apply_bins", apply_bins, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
+
+static float msec(struct timeval t0, struct timeval t1)
+{
+    return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
+}
 
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
@@ -144,8 +150,21 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_sum_sqs[0] = root_sum_sqs;
     node_scores[0] = root_var;
 
-    // time_t start = time(NULL);
+    struct timeval total_start;
+    struct timeval total_end;
+    struct timeval stat_start;
+    struct timeval split_start;
+    struct timeval split_end;
+    long stat_ms = 0;
+    long split_ms = 0;
+    int loops = 0;
+
+    gettimeofday(&total_start, NULL);
     while (node_count < max_nodes - 2 && done_count < node_count) {
+        loops++;
+
+        gettimeofday(&stat_start, NULL);
+
         #pragma omp parallel for collapse(2)
         for (uint16_t n = done_count; n < node_count; n++) {
             for (uint64_t c = 0; c < cols; c++) {
@@ -224,6 +243,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
         }
+        gettimeofday(&split_start, NULL);
+        stat_ms += msec(stat_start, split_start);
 
         // we've finised choosing the splits
 
@@ -305,8 +326,18 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = 0; n < node_count; n++) {;
             should_split[n] = false;
         }
+
+        gettimeofday(&split_end, NULL);
+        split_ms += msec(split_start, split_end);
+
     }
-    // printf("%ld seconds\n", time(NULL) - start);
+    gettimeofday(&total_end, NULL);
+    printf("%d loops / %d nodes: %.1f total, %.1f stats, %.1f splits\n",
+        loops,
+        node_count,
+        ((float) msec(total_start, total_end)) / 1000.0,
+        ((float) stat_ms) / 1000.0,
+        ((float) split_ms) / 1000.0);
 
     // finally, calculate the mean at each leaf node
     for (uint16_t n = 0; n < node_count; n++) {

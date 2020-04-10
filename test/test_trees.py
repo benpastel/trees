@@ -32,7 +32,7 @@ def test_fit_tree():
   tree = fit_tree(
     X,
     y,
-    Params()
+    Params(smooth_factor=1.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
