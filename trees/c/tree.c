@@ -99,7 +99,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // TODO check for NULL
     uint8_t * restrict X = malloc(rows * cols * sizeof(uint8_t));
     uint8_t * restrict X2 = malloc(rows * cols * sizeof(uint8_t));
-    memcpy(X, X_orig, rows * cols * sizeof(uint8_t));
+    // memcpy(X, X_orig, rows * cols * sizeof(uint8_t));
+    for (uint64_t r = 0; r < rows; r++) {
+        for (uint64_t c = 0; c < cols; c++) {
+            X[c*rows + r] = X_orig[r*cols + c];
+        }
+    }
 
     double * restrict y = malloc(rows * sizeof(double));
     double * restrict y2 = malloc(rows * sizeof(double));
@@ -175,9 +180,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double   sums    [vals] = {0.0};
                 double   sum_sqs [vals] = {0.0};
 
+                uint64_t offset = c * rows;
                 uint64_t stop_row = node_starts[n] + node_counts[n];
                 for (uint64_t r = node_starts[n]; r < stop_row; r++) {
-                    uint8_t v = X[r * cols + c];
+                    uint8_t v = X[offset + r];
                     counts[v]++;
                     sums[v] += y[r];
                     sum_sqs[v] += y[r] * y[r];
@@ -290,7 +296,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint64_t src_r = node_starts[n]; src_r < node_starts[n] + node_counts[n]; src_r++) {
                 // copy row i from tmp into the correct node's region of X and y
-                uint8_t val = X[src_r * cols + split_col[n]];
+                uint8_t val = X[split_col[n] * rows + src_r];
 
                 uint16_t child;
                 uint64_t dest_r;
@@ -304,7 +310,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     child = right_childs[n];
                     dest_r = right_r++;
                 }
-                memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
+                // memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
+                for (uint64_t c = 0; c < cols; c++) {
+                    X2[c * rows + dest_r] = X[c * rows + src_r];
+                }
                 y2[dest_r] = y[src_r];
 
                 // TODO track these from the split
