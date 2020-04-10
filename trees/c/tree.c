@@ -98,9 +98,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // make a full copy of X and y so that we can mutate them
     // TODO check for NULL
     uint8_t * restrict X = malloc(rows * cols * sizeof(uint8_t));
+    uint8_t * restrict X2 = malloc(rows * cols * sizeof(uint8_t));
     memcpy(X, X_orig, rows * cols * sizeof(uint8_t));
 
     double * restrict y = malloc(rows * sizeof(double));
+    double * restrict y2 = malloc(rows * sizeof(double));
     memcpy(y, y_orig, rows * sizeof(double));
 
     uint16_t node_count = 1;
@@ -282,44 +284,40 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = done_count; n < node_count; n++) {
             if (!should_split[n]) continue;
 
-            // first copy X and y into temp buffers
-            // TODO handle NULL
-            uint8_t * restrict X_buf = malloc(node_counts[n] * cols * sizeof(uint8_t));
-            memcpy(X_buf, &X[node_starts[n]*cols], node_counts[n] * cols * sizeof(uint8_t));
-
-            double * restrict y_buf = malloc(node_counts[n] * sizeof(double));
-            memcpy(y_buf, &y[node_starts[n]], node_counts[n] * sizeof(double));
-
             uint64_t left_r = node_starts[left_childs[n]];
             uint64_t mid_r = node_starts[mid_childs[n]];
             uint64_t right_r = node_starts[right_childs[n]];
 
-            for (uint64_t i = 0; i < node_counts[n]; i++) {
+            for (uint64_t src_r = node_starts[n]; src_r < node_starts[n] + node_counts[n]; src_r++) {
                 // copy row i from tmp into the correct node's region of X and y
-                uint8_t val = X_buf[i * cols + split_col[n]];
+                uint8_t val = X[src_r * cols + split_col[n]];
 
                 uint16_t child;
-                uint64_t r;
+                uint64_t dest_r;
                 if (val <= split_lo[n]) {
                     child = left_childs[n];
-                    r = left_r++;
+                    dest_r = left_r++;
                 } else if (val <= split_hi[n]) {
                     child = mid_childs[n];
-                    r = mid_r++;
+                    dest_r = mid_r++;
                 } else {
                     child = right_childs[n];
-                    r = right_r++;
+                    dest_r = right_r++;
                 }
-                memcpy(&X[r*cols], &X_buf[i*cols], cols * sizeof(uint8_t));
-                y[r] = y_buf[i];
+                memcpy(&X2[dest_r*cols], &X[src_r*cols], cols * sizeof(uint8_t));
+                y2[dest_r] = y[src_r];
 
                 // TODO track these from the split
-                node_sums[child] += y_buf[i];
-                node_sum_sqs[child] += y_buf[i] * y_buf[i];
+                node_sums[child] += y[src_r];
+                node_sum_sqs[child] += y[src_r] * y[src_r];
             }
-            free(X_buf);
-            free(y_buf);
         }
+        uint8_t * restrict X_tmp = X;
+        double * restrict y_tmp = y;
+        X = X2;
+        y = y2;
+        X2 = X_tmp;
+        y2 = y_tmp;
 
         done_count = node_count;
         node_count = new_node_count;
@@ -346,8 +344,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
         omp_destroy_lock(&node_locks[n]);
     }
-    free(X);
-    free(y);
+    free(X); free(X2);
+    free(y); free(y2);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
