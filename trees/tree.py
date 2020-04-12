@@ -40,7 +40,7 @@ def fit_tree(
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
 
   node_count = build_tree(
-    X,
+    X.T, # TODO columnar everywhere
     y,
     split_cols,
     split_lo_vals,

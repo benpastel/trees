@@ -81,7 +81,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X_orig       = PyArray_DATA((PyArrayObject *) X_obj);
+    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
     double *   restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
     uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
@@ -91,8 +91,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
 
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    // TODO rename to rows & feats?
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
     const uint64_t vals = 256;
 
@@ -107,12 +108,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     int loops = 0;
     gettimeofday(&total_start, NULL);
 
-    uint8_t * restrict X = malloc(cols * rows * sizeof(uint8_t));
-    for (uint64_t r = 0; r < rows; r++) {
-        for (uint64_t c = 0; c < cols; c++) {
-            X[c*rows + r] = X_orig[r*cols + c];
-        }
-    }
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
     uint16_t node_count = 1;
@@ -347,7 +342,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
         omp_destroy_lock(&node_locks[n]);
     }
-    free(X);
     free(memberships);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
