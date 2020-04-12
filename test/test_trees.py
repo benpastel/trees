@@ -29,7 +29,7 @@ def test_fit_tree():
     [5, 5],
   ], dtype=np.uint8)
   y = np.array([2, 1, 0, 2, 1, 0], dtype=np.double)
-  tree = fit_tree(
+  tree, preds = fit_tree(
     X.T,
     y,
     Params(smooth_factor=1.0)
@@ -43,6 +43,7 @@ def test_fit_tree():
   assert_array_equal(tree.split_lo_vals,     [1, 0, 0, 0])
   assert_array_equal(tree.split_hi_vals,     [3, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [1, 1, 2, 0])
+  assert_array_almost_equal(preds, [2, 1, 0, 2, 1, 0])
 
   # from here on use 1 column X, X = y, for simplicity
   #            (3,9)
@@ -53,7 +54,7 @@ def test_fit_tree():
   #
   X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
-  tree = fit_tree(
+  tree, preds = fit_tree(
     X.T,
     y,
     Params(smooth_factor=1.0)
@@ -67,6 +68,7 @@ def test_fit_tree():
   assert_array_equal(tree.split_lo_vals,  [3, 0, 0, 0])
   assert_array_equal(tree.split_hi_vals,  [9, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [np.mean(y), 7/4, 8, 100])
+  assert_array_almost_equal(preds, [8, 7/4, 8, 7/4, 7/4, 100, 7/4, 100, 100])
 
   #             (3, 9)
   #             /  |  \
@@ -78,7 +80,7 @@ def test_fit_tree():
   #
   X = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.uint8).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.double)
-  tree = fit_tree(
+  tree, preds = fit_tree(
     X.T,
     y,
     Params(smooth_factor=0.0)
@@ -92,4 +94,5 @@ def test_fit_tree():
   assert_array_equal(tree.split_lo_vals,  [3, 0, 0, 0, 0, 0, 0])
   assert_array_equal(tree.split_hi_vals,  [9, 2, 0, 0, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [np.mean(y), 7/4, 8, 20, 0, 2, 3])
+  assert_array_almost_equal(preds, [8, 2, 8, 0, 2, 20, 3, 20, 20])
 

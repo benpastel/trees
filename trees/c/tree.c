@@ -31,21 +31,24 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *X_arg, *y_arg;
     PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
+    PyObject *preds_arg;
     double smooth_factor_arg;
 
     struct timeval total_start;
-    struct timeval total_end;
+    struct timeval init_end;
     struct timeval stat_start;
     struct timeval split_start;
     struct timeval split_end;
-    struct timeval init_end;
+    struct timeval post_start;
+    struct timeval total_end;
+
     long stat_ms = 0;
     long split_ms = 0;
     int loops = 0;
     gettimeofday(&total_start, NULL);
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!d",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!d",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
@@ -55,6 +58,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &mid_childs_arg,
         &PyArray_Type, &right_childs_arg,
         &PyArray_Type, &node_mean_arg,
+        &PyArray_Type, &preds_arg,
         &smooth_factor_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
 
@@ -67,6 +71,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+    PyObject *preds_obj = PyArray_FROM_OTF(preds_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         y_obj == NULL ||
@@ -76,7 +81,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         left_childs_obj == NULL ||
         mid_childs_obj == NULL ||
         right_childs_obj == NULL ||
-        node_mean_obj == NULL)
+        node_mean_obj == NULL ||
+        preds_obj == NULL)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(y_obj);
@@ -87,6 +93,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_XDECREF(mid_childs_obj);
         Py_XDECREF(right_childs_obj);
         Py_XDECREF(node_mean_obj);
+        Py_XDECREF(preds_obj);
         return NULL;
     }
 
@@ -101,6 +108,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
     // TODO rename to rows & feats?
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
@@ -326,22 +334,21 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         gettimeofday(&split_end, NULL);
         split_ms += msec(split_start, split_end);
     }
-    gettimeofday(&total_end, NULL);
-    printf("%d loops / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits\n",
-        loops,
-        node_count,
-        ((float) msec(total_start, total_end)) / 1000.0,
-        ((float) msec(total_start, init_end)) / 1000.0,
-        ((float) stat_ms) / 1000.0,
-        ((float) split_ms) / 1000.0);
+    gettimeofday(&post_start, NULL);
 
-    // finally, calculate the mean at each leaf node
+    // calculate the mean at each leaf node
     for (uint16_t n = 0; n < node_count; n++) {
         if (node_counts[n] > 0) {
             node_means[n] = node_sums[n] / node_counts[n];
         }
         omp_destroy_lock(&node_locks[n]);
     }
+    // find the prediction for each leaf
+    #pragma omp parallel for
+    for (uint64_t r = 0; r < rows; r++) {
+        preds[r] = node_means[memberships[r]];
+    }
+
     free(memberships);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
@@ -352,9 +359,20 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(mid_childs_obj);
     Py_DECREF(right_childs_obj);
     Py_DECREF(node_mean_obj);
+    Py_DECREF(preds_obj);
+
+    gettimeofday(&total_end, NULL);
+    printf("Fit %d loops / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
+        loops,
+        node_count,
+        ((float) msec(total_start, total_end)) / 1000.0,
+        ((float) msec(total_start, init_end)) / 1000.0,
+        ((float) stat_ms) / 1000.0,
+        ((float) split_ms) / 1000.0,
+        ((float) msec(post_start, total_end)) / 1000.0);
+
     return Py_BuildValue("i", node_count);
 }
-
 
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
@@ -362,6 +380,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *out_arg;
+
+    struct timeval total_start;
+    struct timeval total_stop;
+    gettimeofday(&total_start, NULL);
 
     // parse input arguments
     if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
@@ -421,6 +443,8 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
+
+    gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
@@ -433,6 +457,8 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         }
         out[r] = node_means[n];
     }
+    gettimeofday(&loop_stop, NULL);
+
     Py_DECREF(X_obj);
     Py_DECREF(split_col_obj);
     Py_DECREF(split_lo_obj);
@@ -442,6 +468,12 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(right_childs_obj);
     Py_DECREF(node_mean_obj);
     Py_DECREF(out_obj);
+
+    gettimeofday(&total_stop, NULL);
+    printf("  eval: %.1f (%.1f loop)\n",
+        ((float) msec(total_start, total_stop)) / 1000.0,
+        ((float) msec(loop_start, loop_stop)) / 1000.0);
+
     Py_RETURN_NONE;
 }
 
@@ -449,6 +481,12 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 static PyObject* apply_bins(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg, *bins_arg, *out_arg;
+
+    struct timeval total_start;
+    struct timeval loop_start;
+    struct timeval loop_stop;
+    struct timeval total_stop;
+    gettimeofday(&total_start, NULL);
 
     // parse input arguments
     if (!PyArg_ParseTuple(args, "O!O!O!",
@@ -484,6 +522,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     // we count 255 - (the number of seps the is less than);
     // this is easier to vectorize
     //
+    gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t c = 0; c < cols; c++) {
         for (uint64_t r = 0; r < rows; r++) {
@@ -495,9 +534,16 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             out[r*cols + c] = max_val - sum;
         }
     }
+    gettimeofday(&loop_stop, NULL);
     Py_DECREF(X_obj);
     Py_DECREF(bins_obj);
     Py_DECREF(out_obj);
+
+    gettimeofday(&total_stop, NULL);
+    printf("apply bins: %.1f (%.1f loop)\n",
+        ((float) msec(total_start, total_stop)) / 1000.0,
+        ((float) msec(loop_start, loop_stop)) / 1000.0);
+
     Py_RETURN_NONE;
 }
 

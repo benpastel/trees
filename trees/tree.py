@@ -38,6 +38,7 @@ def fit_tree(
   mid_children = np.zeros((params.max_nodes,), dtype=np.uint16)
   right_children = np.zeros((params.max_nodes,), dtype=np.uint16)
   node_means = np.zeros((params.max_nodes,), dtype=np.double)
+  preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
     XT,
@@ -49,6 +50,7 @@ def fit_tree(
     mid_children,
     right_children,
     node_means,
+    preds,
     params.smooth_factor)
 
   # filter down to the number of nodes we actually used
@@ -61,7 +63,7 @@ def fit_tree(
     mid_children[:node_count],
     right_children[:node_count],
     node_means[:node_count]
-  )
+  ), preds
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:

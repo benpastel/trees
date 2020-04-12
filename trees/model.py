@@ -44,25 +44,27 @@ def choose_bins(
   #
   rows, cols = X.shape
 
-  if rows > SAMPLE_COUNT:
-    sample = np.random.randint(rows, size=SAMPLE_COUNT, dtype=np.intp)
-    X = X[sample, :]
+  with timed('choose bins'):
 
-  bins = np.zeros((cols, bucket_count-1), dtype=X.dtype)
-  for c in range(cols):
-    # since splits are <= value, don't consider the highest value
-    uniqs = np.unique(X[:, c])[:-1]
+    if rows > SAMPLE_COUNT:
+      sample = np.random.randint(rows, size=SAMPLE_COUNT, dtype=np.intp)
+      X = X[sample, :]
 
-    if len(uniqs) < bucket_count - 1:
-      bins[c, :len(uniqs)] = uniqs
-    else:
-      # to make bucket_count buckets, there are bucket_count-1 separators
-      # including both ends is bucket_count+1
-      indices = np.linspace(0, len(uniqs), endpoint=False, num=bucket_count+1, dtype=np.intp)
+    bins = np.zeros((cols, bucket_count-1), dtype=X.dtype)
+    for c in range(cols):
+      # since splits are <= value, don't consider the highest value
+      uniqs = np.unique(X[:, c])[:-1]
 
-      # now throw away both ends and keep just the separators
-      indices = indices[1:-1]
-      bins[c] = uniqs[indices]
+      if len(uniqs) < bucket_count - 1:
+        bins[c, :len(uniqs)] = uniqs
+      else:
+        # to make bucket_count buckets, there are bucket_count-1 separators
+        # including both ends is bucket_count+1
+        indices = np.linspace(0, len(uniqs), endpoint=False, num=bucket_count+1, dtype=np.intp)
+
+        # now throw away both ends and keep just the separators
+        indices = indices[1:-1]
+        bins[c] = uniqs[indices]
 
   assert bins.shape == (cols, bucket_count-1)
   assert bins.dtype == X.dtype
@@ -102,21 +104,19 @@ def fit(
   X = apply_bins(X, digitize_bins)
   assert X.dtype == np.uint8
 
-  XT = X.T.copy()
-
-  float_targets = (y.dtype != np.bool)
-  y = y.astype(np.double, copy=False)
-
-  preds = np.mean(y)
+  with timed('prepare to fit...'):
+    XT = X.T.copy()
+    float_targets = (y.dtype != np.bool)
+    y = y.astype(np.double, copy=False)
+    preds = np.mean(y)
 
   trees = []
   for t in range(params.tree_count):
     target = params.learning_rate * (y - preds)
 
-    tree = fit_tree(XT, target, params)
+    tree, new_preds = fit_tree(XT, target, params)
     trees.append(tree)
 
-    new_preds = eval_tree(tree, X)
     preds += new_preds
 
   return Model(trees, digitize_bins, float_targets, np.mean(y))
