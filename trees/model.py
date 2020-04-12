@@ -102,6 +102,8 @@ def fit(
   X = apply_bins(X, digitize_bins)
   assert X.dtype == np.uint8
 
+  XT = X.T.copy()
+
   float_targets = (y.dtype != np.bool)
   y = y.astype(np.double, copy=False)
 
@@ -111,7 +113,7 @@ def fit(
   for t in range(params.tree_count):
     target = params.learning_rate * (y - preds)
 
-    tree = fit_tree(X, target, params)
+    tree = fit_tree(XT, target, params)
     trees.append(tree)
 
     new_preds = eval_tree(tree, X)
