@@ -33,6 +33,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     double smooth_factor_arg;
 
+    struct timeval total_start;
+    struct timeval total_end;
+    struct timeval stat_start;
+    struct timeval split_start;
+    struct timeval split_end;
+    struct timeval init_end;
+    long stat_ms = 0;
+    long split_ms = 0;
+    int loops = 0;
+    gettimeofday(&total_start, NULL);
+
     // parse input arguments
     if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!d",
         &PyArray_Type, &X_arg,
@@ -96,17 +107,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
     const uint64_t vals = 256;
-
-    struct timeval total_start;
-    struct timeval total_end;
-    struct timeval stat_start;
-    struct timeval split_start;
-    struct timeval split_end;
-    struct timeval init_end;
-    long stat_ms = 0;
-    long split_ms = 0;
-    int loops = 0;
-    gettimeofday(&total_start, NULL);
 
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
