@@ -25,6 +25,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
+#define VERBOSE 0
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -41,11 +42,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     struct timeval split_end;
     struct timeval post_start;
     struct timeval total_end;
-
     long stat_ms = 0;
     long split_ms = 0;
     int loops = 0;
     gettimeofday(&total_start, NULL);
+
 
     // parse input arguments
     if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!d",
@@ -362,6 +363,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(preds_obj);
 
     gettimeofday(&total_end, NULL);
+#if VERBOSE
     printf("Fit %d loops / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
         loops,
         node_count,
@@ -370,6 +372,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         ((float) stat_ms) / 1000.0,
         ((float) split_ms) / 1000.0,
         ((float) msec(post_start, total_end)) / 1000.0);
+#endif
 
     return Py_BuildValue("i", node_count);
 }
@@ -473,9 +476,11 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(out_obj);
 
     gettimeofday(&total_stop, NULL);
+#if VERBOSE
     printf("  eval: %.1f (%.1f loop)\n",
         ((float) msec(total_start, total_stop)) / 1000.0,
         ((float) msec(loop_start, loop_stop)) / 1000.0);
+#endif
 
     Py_RETURN_NONE;
 }
@@ -545,9 +550,11 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     Py_DECREF(out_obj);
 
     gettimeofday(&total_stop, NULL);
+#if VERBOSE
     printf("apply bins: %.1f (%.1f loop)\n",
         ((float) msec(total_start, total_stop)) / 1000.0,
         ((float) msec(loop_start, loop_stop)) / 1000.0);
+#endif
 
     Py_RETURN_NONE;
 }
