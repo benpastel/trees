@@ -25,7 +25,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -111,7 +111,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
-    // TODO rename to rows & feats?
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
@@ -534,8 +533,8 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     //
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
-    for (uint64_t c = 0; c < cols; c++) {
-        for (uint64_t r = 0; r < rows; r++) {
+    for (uint64_t r = 0; r < rows; r++) {
+        for (uint64_t c = 0; c < cols; c++) {
             float val = X[r*cols + c];
             uint8_t sum = 0; // simple accumulator so clang can vectorize
             for (uint64_t v = 0; v < seps; v++) {
