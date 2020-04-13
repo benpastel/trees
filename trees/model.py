@@ -13,12 +13,11 @@ from trees.utils import timed
 @dataclass
 class Model:
   trees: List[Tree]
-  digitize_bins: np.ndarray
-  float_targets: bool
+  targets_are_float: bool
   mean: float
 
   def __str__(self, verbose = False):
-    model_type = "Regression" if self.float_targets else "Classification"
+    model_type = "Regression" if self.targets_are_float else "Classification"
     sizes = [t.node_count for t in self.trees]
     s = (f'{model_type} model with {len(self.trees)} trees with sizes '
       + f'min={min(sizes)} max={max(sizes)} mean={np.mean(sizes)}')
@@ -78,16 +77,12 @@ def apply_bins(
   ''' returns X bucketed into the splits '''
   rows, cols = X.shape
   assert bins.shape == (cols, BUCKET_COUNT-1)
+  assert X.dtype == np.float32
+  assert bins.dtype == np.float32
 
-  binned_X = np.zeros(X.shape, dtype=np.uint8)
+  binned_X = np.zeros((cols, rows), dtype=np.uint8)
 
-  # cast to float32 to simplify the C code
-  # TODO: support arbitrary types
-  # or at least MORE types so we don't need an unnecessary copy
-  c_apply_bins(
-    X.astype(np.float32),
-    bins.astype(np.float32),
-    binned_X)
+  c_apply_bins(X, bins, binned_X)
 
   return binned_X
 
@@ -99,39 +94,39 @@ def fit(
 ) -> Model:
   assert X.ndim == 2
   assert y.shape == (X.shape[0],)
+  targets_are_float = (y.dtype != np.bool)
 
-  digitize_bins = choose_bins(X)
-  X = apply_bins(X, digitize_bins)
-  assert X.dtype == np.uint8
+  # TODO support multiple dtypes to avoid copy
+  X = X.astype(np.float32, copy=False)
+  y = y.astype(np.double, copy=False)
+  preds = np.mean(y)
 
-  with timed('prepare to fit...'):
-    XT = X.T.copy()
-    float_targets = (y.dtype != np.bool)
-    y = y.astype(np.double, copy=False)
-    preds = np.mean(y)
+  bins = choose_bins(X)
+  XT = apply_bins(X, bins)
+  assert XT.dtype == np.uint8
 
   trees = []
   for t in range(params.tree_count):
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(XT, target, params)
+    tree, new_preds = fit_tree(XT, target, bins, params)
     trees.append(tree)
 
     preds += new_preds
 
-  return Model(trees, digitize_bins, float_targets, np.mean(y))
+  return Model(trees, targets_are_float, np.mean(y))
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
-  X = apply_bins(X, model.digitize_bins)
+  X = X.astype(np.float32, copy=False)
 
   values = np.zeros(len(X)) + model.mean
 
   for tree in model.trees:
     values += eval_tree(tree, X)
 
-  if model.float_targets:
+  if model.targets_are_float:
     return values
   else:
     # we only handle binary classification so far

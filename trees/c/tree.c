@@ -202,7 +202,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double left_sum_sq = 0.0;
 
                 // evaluate each possible splitting point
-                for (uint64_t lo = 0; lo < vals - 1; lo++) {
+                for (uint64_t lo = 0; lo < vals - 2; lo++) {
                    uint64_t lo_i = n*vals + lo;
 
                     if (counts[lo_i] == 0) continue;
@@ -215,7 +215,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double mid_sum = 0.0;
                     double mid_sum_sq = 0.0;
 
-                    for (uint64_t hi = lo + 1; hi < vals; hi++) {
+                    for (uint64_t hi = lo + 1; hi < vals - 1; hi++) {
                         uint64_t hi_i = n*vals + hi;
 
                         mid_count += counts[hi_i];
@@ -382,6 +382,8 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     PyObject *out_arg;
 
     struct timeval total_start;
+    struct timeval loop_start;
+    struct timeval loop_stop;
     struct timeval total_stop;
     gettimeofday(&total_start, NULL);
 
@@ -397,10 +399,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
-    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
@@ -430,10 +432,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     }
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    float *    restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    float *    restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    float *    restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
     uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
@@ -450,12 +452,13 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         uint16_t n = 0;
         uint16_t left;
         while ((left = left_childs[n])) {
-            uint8_t val = X[r*cols + split_col[n]];
+            float val = X[r*cols + split_col[n]];
             n = (val <= split_lo[n]) ? left :
                 (val <= split_hi[n]) ? mid_childs[n] :
                 right_childs[n];
         }
         out[r] = node_means[n];
+
     }
     gettimeofday(&loop_stop, NULL);
 
@@ -522,6 +525,8 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     // we count 255 - (the number of seps the is less than);
     // this is easier to vectorize
     //
+    // we also transpose (rows, cols) => (cols, rows) when we write to out
+    //
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t c = 0; c < cols; c++) {
@@ -531,7 +536,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             for (uint64_t v = 0; v < seps; v++) {
                 sum += (val <= bins[c*seps + v]);
             }
-            out[r*cols + c] = max_val - sum;
+            out[c*rows + r] = max_val - sum;
         }
     }
     gettimeofday(&loop_stop, NULL);

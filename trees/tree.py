@@ -20,32 +20,35 @@ class Tree:
 def fit_tree(
     XT: np.ndarray,
     y: np.ndarray,
+    bins: np.ndarray,
     params: Params
 ) -> Tuple[Tree, np.ndarray]:
   feats, rows = XT.shape
   assert XT.dtype == np.uint8
   assert y.dtype == np.double
   assert y.shape == (rows,)
+  assert bins.shape == (feats, 255)
+  assert bins.dtype == np.float32
   assert 0 < params.max_nodes < 2**16
   assert 0 <= params.smooth_factor
 
   # output arrays for c function
   # pre-allocated to the max number of nodes
-  split_cols = np.zeros((params.max_nodes,), dtype=np.uint64)
-  split_lo_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
-  split_hi_vals = np.zeros((params.max_nodes,), dtype=np.uint8)
-  left_children = np.zeros((params.max_nodes,), dtype=np.uint16)
-  mid_children = np.zeros((params.max_nodes,), dtype=np.uint16)
-  right_children = np.zeros((params.max_nodes,), dtype=np.uint16)
-  node_means = np.zeros((params.max_nodes,), dtype=np.double)
+  split_cols = np.zeros(params.max_nodes, dtype=np.uint64)
+  split_lo_bins = np.zeros(params.max_nodes, dtype=np.uint8)
+  split_hi_bins = np.zeros(params.max_nodes, dtype=np.uint8)
+  left_children = np.zeros(params.max_nodes, dtype=np.uint16)
+  mid_children = np.zeros(params.max_nodes, dtype=np.uint16)
+  right_children = np.zeros(params.max_nodes, dtype=np.uint16)
+  node_means = np.zeros(params.max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
     XT,
     y,
     split_cols,
-    split_lo_vals,
-    split_hi_vals,
+    split_lo_bins,
+    split_hi_bins,
     left_children,
     mid_children,
     right_children,
@@ -53,12 +56,19 @@ def fit_tree(
     preds,
     params.smooth_factor)
 
+  # convert the splits from binned uint8 values => original float32 values
+  split_lo_vals = np.zeros(node_count, dtype=np.float32)
+  split_hi_vals = np.zeros(node_count, dtype=np.float32)
+  for n in range(node_count):
+    split_lo_vals[n] = bins[split_cols[n], split_lo_bins[n]]
+    split_hi_vals[n] = bins[split_cols[n], split_hi_bins[n]]
+
   # filter down to the number of nodes we actually used
   return Tree(
     node_count,
     split_cols[:node_count],
-    split_lo_vals[:node_count],
-    split_hi_vals[:node_count],
+    split_lo_vals,
+    split_hi_vals,
     left_children[:node_count],
     mid_children[:node_count],
     right_children[:node_count],
@@ -67,7 +77,7 @@ def fit_tree(
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
-  assert X.dtype == np.uint8
+  assert X.dtype == np.float32
   assert X.ndim == 2
   rows, feats = X.shape
 

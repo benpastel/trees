@@ -3,16 +3,14 @@ import pprint
 
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from trees.tree import fit_tree, eval_tree
+from trees.tree import fit_tree, eval_tree, Tree
 from trees.params import Params
-
-# TODO test eval
 
 
 def test_fit_tree():
   pp = pprint.PrettyPrinter(indent=4)
 
-  # test X values & columns are tracked properly
+  # test X values, columns, bins are tracked properly
   #
   # perfect split on 2nd column
   #
@@ -29,20 +27,26 @@ def test_fit_tree():
     [5, 5],
   ], dtype=np.uint8)
   y = np.array([2, 1, 0, 2, 1, 0], dtype=np.double)
+  bins = np.array([
+    np.arange(255, dtype=np.float32),
+    10.0 * np.arange(255, dtype=np.float32)
+  ])
+
   tree, preds = fit_tree(
     X.T,
     y,
+    bins,
     Params(smooth_factor=1.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
-  assert_array_equal(tree.left_children,     [1, 0, 0, 0])
-  assert_array_equal(tree.mid_children,      [2, 0, 0, 0])
-  assert_array_equal(tree.right_children,    [3, 0, 0, 0])
-  assert_array_equal(tree.split_cols,        [1, 0, 0, 0])
-  assert_array_equal(tree.split_lo_vals,     [1, 0, 0, 0])
-  assert_array_equal(tree.split_hi_vals,     [3, 0, 0, 0])
-  assert_array_almost_equal(tree.node_means, [1, 1, 2, 0])
+  assert_array_equal(tree.left_children,        [ 1, 0, 0, 0])
+  assert_array_equal(tree.mid_children,         [ 2, 0, 0, 0])
+  assert_array_equal(tree.right_children,       [ 3, 0, 0, 0])
+  assert_array_equal(tree.split_cols,           [ 1, 0, 0, 0])
+  assert_array_almost_equal(tree.split_lo_vals, [10, 0, 0, 0])
+  assert_array_almost_equal(tree.split_hi_vals, [30, 0, 0, 0])
+  assert_array_almost_equal(tree.node_means,    [ 1, 1, 2, 0])
   assert_array_almost_equal(preds, [2, 1, 0, 2, 1, 0])
 
   # from here on use 1 column X, X = y, for simplicity
@@ -54,19 +58,21 @@ def test_fit_tree():
   #
   X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
     X.T,
     y,
+    bins,
     Params(smooth_factor=1.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
-  assert_array_equal(tree.left_children,  [1, 0, 0, 0])
-  assert_array_equal(tree.mid_children,   [2, 0, 0, 0])
-  assert_array_equal(tree.right_children, [3, 0, 0, 0])
-  assert_array_equal(tree.split_cols,     [0, 0, 0, 0])
-  assert_array_equal(tree.split_lo_vals,  [3, 0, 0, 0])
-  assert_array_equal(tree.split_hi_vals,  [9, 0, 0, 0])
+  assert_array_equal(tree.left_children,         [1, 0, 0, 0])
+  assert_array_equal(tree.mid_children,          [2, 0, 0, 0])
+  assert_array_equal(tree.right_children,        [3, 0, 0, 0])
+  assert_array_equal(tree.split_cols,            [0, 0, 0, 0])
+  assert_array_almost_equal(tree.split_lo_vals,  [3, 0, 0, 0])
+  assert_array_almost_equal(tree.split_hi_vals,  [9, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [np.mean(y), 7/4, 8, 100])
   assert_array_almost_equal(preds, [8, 7/4, 8, 7/4, 7/4, 100, 7/4, 100, 100])
 
@@ -80,19 +86,58 @@ def test_fit_tree():
   #
   X = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.uint8).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.double)
+  bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
     X.T,
     y,
+    bins,
     Params(smooth_factor=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 7
-  assert_array_equal(tree.left_children,  [1, 4, 0, 0, 0, 0, 0])
-  assert_array_equal(tree.mid_children,   [2, 5, 0, 0, 0, 0, 0])
-  assert_array_equal(tree.right_children, [3, 6, 0, 0, 0, 0, 0])
-  assert_array_equal(tree.split_cols,     [0, 0, 0, 0, 0, 0, 0])
-  assert_array_equal(tree.split_lo_vals,  [3, 0, 0, 0, 0, 0, 0])
-  assert_array_equal(tree.split_hi_vals,  [9, 2, 0, 0, 0, 0, 0])
+  assert_array_equal(tree.left_children,         [1, 4, 0, 0, 0, 0, 0])
+  assert_array_equal(tree.mid_children,          [2, 5, 0, 0, 0, 0, 0])
+  assert_array_equal(tree.right_children,        [3, 6, 0, 0, 0, 0, 0])
+  assert_array_equal(tree.split_cols,            [0, 0, 0, 0, 0, 0, 0])
+  assert_array_almost_equal(tree.split_lo_vals,  [3, 0, 0, 0, 0, 0, 0])
+  assert_array_almost_equal(tree.split_hi_vals,  [9, 2, 0, 0, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [np.mean(y), 7/4, 8, 20, 0, 2, 3])
   assert_array_almost_equal(preds, [8, 2, 8, 0, 2, 20, 3, 20, 20])
+
+
+def test_eval_tree():
+  #     1:(1,100)
+  #   /    |      \
+  #  /     |       \
+  # 1   0:(10,20)   9
+  #      /  |  \
+  #     3   2   1
+  #
+  tree = Tree(
+    node_count = 7,
+    split_cols     = np.array([1,   0,  0, 0, 0, 0, 0], dtype=np.uint64),
+    split_lo_vals  = np.array([1,   0, 10, 0, 0, 0, 0], dtype=np.float32),
+    split_hi_vals  = np.array([100, 0, 20, 0, 0, 0, 0], dtype=np.float32),
+    left_children  = np.array([1,   0,  4, 0, 0, 0, 0], dtype=np.uint16),
+    mid_children   = np.array([2,   0,  5, 0, 0, 0, 0], dtype=np.uint16),
+    right_children = np.array([3,   0,  6, 0, 0, 0, 0], dtype=np.uint16),
+    node_means     = np.array([0,   1,  0, 9, 3, 2, 1], dtype=np.double),
+  )
+
+  X = np.array([
+    [20, 10],
+    [20, 1],
+    [20, 101],
+  ], dtype=np.float32)
+  assert_array_almost_equal(
+    eval_tree(tree, X),
+    np.array([
+      2,
+      1,
+      9
+    ]))
+
+
+
+
 

@@ -5,18 +5,18 @@ from trees.model import choose_bins, apply_bins
 
 def test_choose_bins():
   X = np.array([
-    [0.0, 'b'],
-    [2.0, 'b'],
-    [1.0, 'a'],
-    [5.0, 'a'],
-  ], dtype=object)
+    [0.0, 20.0],
+    [2.0, 20.0],
+    [1.0, 10.0],
+    [5.0, 10.0],
+  ], dtype=np.float32)
   actual = choose_bins(X, bucket_count=2)
   assert actual.shape == (2, 1)
   assert_array_almost_equal(actual[0], [1.0])
-  assert_array_equal(actual[1], ['a'])
+  assert_array_almost_equal(actual[1], [10.0])
 
 def test_apply_bins():
-  bins = np.zeros((1, 255), dtype=int) + 255
+  bins = np.zeros((1, 255), dtype=np.float32) + 255
   bins[0, 0] = 1
   bins[0, 1] = 3
   X = np.array([
@@ -25,6 +25,6 @@ def test_apply_bins():
     [2],
     [3],
     [4]
-  ])
+  ], dtype=np.float32)
   actual = apply_bins(X, bins)
-  assert_array_equal(actual[:, 0], [0, 0, 1, 1, 2])
+  assert_array_almost_equal(actual, [[0, 0, 1, 1, 2]])
