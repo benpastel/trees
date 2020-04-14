@@ -335,6 +335,8 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
+  for tree_count in (1, 5):
+    tree_params = Params(tree_count=tree_count)
     with timed(f'train our tree with {tree_params}...'):
       # with profiled():
       model = fit(train_X, train_y, tree_params)

@@ -54,6 +54,7 @@ def choose_bins(
 
     if len(uniqs) < bucket_count - 1:
       bins[c, :len(uniqs)] = uniqs
+      bins[c, len(uniqs):] = uniqs[-1]
     else:
       # to make bucket_count buckets, there are bucket_count-1 separators
       # including both ends is bucket_count+1
@@ -61,10 +62,17 @@ def choose_bins(
 
       # now throw away both ends and keep just the separators
       indices = indices[1:-1]
+      assert len(indices) == bucket_count-1
+
       bins[c] = uniqs[indices]
 
   assert bins.shape == (cols, bucket_count-1)
   assert bins.dtype == X.dtype
+
+  # check bins are nondecreasing within each feature
+  # by comparing all elements (skip the last) to their right neighbor (skip the first)
+  assert np.all(bins[:,:-1] <= bins[:,1:])
+
   return bins
 
 
@@ -90,14 +98,15 @@ def fit(
     y: np.ndarray,
     params: Params
 ) -> Model:
-  assert X.ndim == 2
-  assert y.shape == (X.shape[0],)
+  rows, feats = X.shape
+  assert y.shape == (rows,)
   targets_are_float = (y.dtype != np.bool)
 
   # TODO support multiple dtypes to avoid copy
   X = X.astype(np.float32, copy=False)
   y = y.astype(np.double, copy=False)
-  preds = np.mean(y)
+  mean_y = np.mean(y)
+  preds = np.full(rows, mean_y, dtype=np.double)
 
   bins = choose_bins(X)
   XT = apply_bins(X, bins)
@@ -112,14 +121,14 @@ def fit(
 
     preds += new_preds
 
-  return Model(trees, targets_are_float, np.mean(y))
+  return Model(trees, targets_are_float, mean_y), preds
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
   X = X.astype(np.float32, copy=False)
 
-  values = np.zeros(len(X), dtype=np.double) + model.mean
+  values = np.full(len(X), model.mean, dtype=np.double)
 
   for tree in model.trees:
     values += eval_tree(tree, X)
