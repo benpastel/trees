@@ -49,8 +49,14 @@ def choose_bins(
 
   bins = np.zeros((cols, bucket_count-1), dtype=X.dtype)
   for c in range(cols):
+    uniqs = np.unique(X[:, c])
+
+    if len(uniqs) == 1:
+      # print(f'Warning: feature {c} is always the same, with value {uniqs[0]}')
+      continue
+
     # since splits are <= value, don't consider the highest value
-    uniqs = np.unique(X[:, c])[:-1]
+    uniqs = uniqs[:-1]
 
     if len(uniqs) < bucket_count - 1:
       bins[c, :len(uniqs)] = uniqs
