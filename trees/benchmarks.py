@@ -287,15 +287,16 @@ if __name__ == '__main__':
   if 'TREE_COUNT' not in os.environ:
     raise ValueError('Expected env variable TREE_COUNT')
   tree_count = int(os.environ['TREE_COUNT'])
+  print(f'\n\nTREE_COUNT={tree_count}')
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
     # 'Agaricus': (load_agaricus, Params(tree_count=tree_count)),
     'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
-    # 'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
-    # 'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
-    # 'M5':                  (load_m5,           Params(tree_count=tree_count)),
-    # 'Grupo':               (load_grupo,        Params(tree_count=tree_count))
+    'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
+    'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
+    'M5':                  (load_m5,           Params(tree_count=tree_count)),
+    'Grupo':               (load_grupo,        Params(tree_count=tree_count))
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
@@ -335,19 +336,17 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-  for tree_count in (1, 5):
-    tree_params = Params(tree_count=tree_count)
-    with timed(f'train our tree with {tree_params}...'):
-      # with profiled():
-      model = fit(train_X, train_y, tree_params)
-    print(model.__str__(verbose=False))
+  with timed(f'train our tree with {tree_params}...'):
+    # with profiled():
+    model = fit(train_X, train_y, tree_params)
+  print(model.__str__(verbose=False))
 
-    with timed(f'predict our tree...'):
-      # with profiled():
-      train_preds = predict(model, train_X)
-      valid_preds = predict(model, valid_X)
-    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    del model
-    del train_preds
-    del valid_preds
-    gc.collect()
+  with timed(f'predict our tree...'):
+    # with profiled():
+    train_preds = predict(model, train_X)
+    valid_preds = predict(model, valid_X)
+  print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+  del model
+  del train_preds
+  del valid_preds
+  gc.collect()
