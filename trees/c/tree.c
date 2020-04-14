@@ -25,7 +25,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -341,12 +341,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         if (node_counts[n] > 0) {
             node_means[n] = node_sums[n] / node_counts[n];
         }
-        omp_destroy_lock(&node_locks[n]);
     }
     // find the prediction for each leaf
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         preds[r] = node_means[memberships[r]];
+    }
+
+    for (uint16_t n = 0; n < max_nodes; n++) {
+        omp_destroy_lock(&node_locks[n]);
     }
 
     free(memberships);

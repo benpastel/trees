@@ -119,7 +119,7 @@ def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
   X = X.astype(np.float32, copy=False)
 
-  values = np.zeros(len(X)) + model.mean
+  values = np.zeros(len(X), dtype=np.double) + model.mean
 
   for tree in model.trees:
     values += eval_tree(tree, X)
