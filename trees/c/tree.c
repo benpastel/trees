@@ -199,7 +199,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             // splits
             for (uint16_t n = done_count; n < node_count; n++) {
                 // min leaf size is 1 for left & right, 0 for mid
-                if node_counts[n] < 2: continue
+                if (node_counts[n] < 2) continue;
 
                 // running sums from the left side
                 uint64_t left_count = 0;
@@ -216,6 +216,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     left_count += counts[lo_i];
                     left_sum += sums[lo_i];
                     left_sum_sq += sum_sqs[lo_i];
+                    double left_var = left_sum_sq - (left_sum * left_sum / left_count);
 
                     uint64_t mid_count = 0;
                     double mid_sum = 0.0;
@@ -226,9 +227,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
                         uint64_t hi_i = n*vals + hi;
 
-                        mid_count += counts[hi_i];
-                        mid_sum += sums[hi_i];
-                        mid_sum_sq += sum_sqs[hi_i];
+                        if (hi > lo) {
+                            mid_count += counts[hi_i];
+                            mid_sum += sums[hi_i];
+                            mid_sum_sq += sum_sqs[hi_i];
+                        }
 
                         uint64_t right_count = node_counts[n] - left_count - mid_count;
                         double right_sum = node_sums[n] - left_sum - mid_sum;
@@ -240,7 +243,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         // weighted average of splits' variance
                         // TODO maybe now we can encourage empty splits by penalty * nonempties?
                         // TODO try k splits for different k?
-                        double left_var = left_sum_sq - (left_sum * left_sum / left_count);
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
@@ -276,7 +278,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             }
                             omp_unset_lock(&node_locks[n]);
                         }
-                        // printf("    split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", lo, hi, left_var, mid_var, right_var, score);
+                        // if (hi < 5)
+                        //     printf("    %llu split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", c, lo, hi, left_var, mid_var, right_var, score);
                     }
                 }
             }

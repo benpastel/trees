@@ -60,7 +60,7 @@ def fit_tree(
     node_means,
     preds,
     params.smooth_factor,
-    max_depth)
+    params.max_depth)
 
   # convert the splits from binned uint8 values => original float32 values
   split_lo_vals = np.zeros(node_count, dtype=np.float32)
