@@ -238,6 +238,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         if (right_count == 0) break;
 
                         // weighted average of splits' variance
+                        // TODO maybe now we can encourage empty splits by penalty * nonempties?
+                        // TODO try k splits for different k?
                         double left_var = left_sum_sq - (left_sum * left_sum / left_count);
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);

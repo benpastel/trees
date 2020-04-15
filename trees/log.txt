@@ -228,3 +228,29 @@ predict our tree...
       train preds: min=-5.8, max=743.7, mean=1.2
       train: MSE: 2.7, MAE: 0.8
       valid: MSE: 4.7, MAE: 0.8
+
+
+
+Grupo:
+
+loading from cache
+X.shape: train (33112214, 75), valid (8278053, 75)
+regression targets with min=0.0, max=5000.0, mean=7.3
+train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
+(270.1s)
+predict xgboost...
+(58.4s)
+
+      train preds: min=-168.4, max=4941.2, mean=7.3
+      train: MSE: 133.6, MAE: 3.7
+      valid: MSE: 159.9, MAE: 3.7
+
+train our tree with Params(smooth_factor=10.0, max_nodes=3280, tree_count=100, learning_rate=0.3)...
+(817.9s)
+Regression model with 100 trees with sizes min=3280 max=3280 mean=3280.0
+predict our tree...
+(64.9s)
+
+      train preds: min=-225.3, max=5007.1, mean=7.3
+      train: MSE: 47.5, MAE: 3.1
+      valid: MSE: 148.2, MAE: 3.4
