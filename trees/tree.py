@@ -29,18 +29,23 @@ def fit_tree(
   assert y.shape == (rows,)
   assert bins.shape == (feats, 255)
   assert bins.dtype == np.float32
-  assert 0 < params.max_nodes < 2**16
   assert 0 <= params.smooth_factor
+
+  # check if depth constraint imposes a tighter max_nodes
+  max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
+  max_nodes = min(params.max_nodes, max_nodes_from_depth)
+  assert 0 < max_nodes < 2**16
+
 
   # output arrays for c function
   # pre-allocated to the max number of nodes
-  split_cols = np.zeros(params.max_nodes, dtype=np.uint64)
-  split_lo_bins = np.zeros(params.max_nodes, dtype=np.uint8)
-  split_hi_bins = np.zeros(params.max_nodes, dtype=np.uint8)
-  left_children = np.zeros(params.max_nodes, dtype=np.uint16)
-  mid_children = np.zeros(params.max_nodes, dtype=np.uint16)
-  right_children = np.zeros(params.max_nodes, dtype=np.uint16)
-  node_means = np.zeros(params.max_nodes, dtype=np.double)
+  split_cols = np.zeros(max_nodes, dtype=np.uint64)
+  split_lo_bins = np.zeros(max_nodes, dtype=np.uint8)
+  split_hi_bins = np.zeros(max_nodes, dtype=np.uint8)
+  left_children = np.zeros(max_nodes, dtype=np.uint16)
+  mid_children = np.zeros(max_nodes, dtype=np.uint16)
+  right_children = np.zeros(max_nodes, dtype=np.uint16)
+  node_means = np.zeros(max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
@@ -54,7 +59,8 @@ def fit_tree(
     right_children,
     node_means,
     preds,
-    params.smooth_factor)
+    params.smooth_factor,
+    max_depth)
 
   # convert the splits from binned uint8 values => original float32 values
   split_lo_vals = np.zeros(node_count, dtype=np.float32)

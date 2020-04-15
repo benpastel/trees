@@ -25,7 +25,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -34,6 +34,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *preds_arg;
     double smooth_factor_arg;
+    int max_depth_arg;
 
     struct timeval total_start;
     struct timeval init_end;
@@ -44,12 +45,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     struct timeval total_end;
     long stat_ms = 0;
     long split_ms = 0;
-    int loops = 0;
     gettimeofday(&total_start, NULL);
 
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!d",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!di",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
@@ -60,8 +60,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &right_childs_arg,
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &preds_arg,
-        &smooth_factor_arg)) return NULL;
+        &smooth_factor_arg,
+        &max_depth_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
+    const int max_depth = max_depth_arg;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -173,8 +175,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     gettimeofday(&init_end, NULL);
 
-    while (node_count < max_nodes - 2 && done_count < node_count) {
-        loops++;
+    int depth = 0;
+    while (depth++ < max_depth && node_count < max_nodes - 2 && done_count < node_count) {
 
         gettimeofday(&stat_start, NULL);
 
@@ -366,8 +368,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     gettimeofday(&total_end, NULL);
 #if VERBOSE
-    printf("Fit %d loops / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
-        loops,
+    printf("Fit depth %d / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
+        depth,
         node_count,
         ((float) msec(total_start, total_end)) / 1000.0,
         ((float) msec(total_start, init_end)) / 1000.0,
