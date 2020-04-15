@@ -291,7 +291,7 @@ if __name__ == '__main__':
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    # 'Agaricus': (load_agaricus, Params(tree_count=tree_count)),
+    'Agaricus': (load_agaricus, Params(tree_count=tree_count)),
     'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
     'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
     'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
