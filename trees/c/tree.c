@@ -485,19 +485,21 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
+        double row_val = 0.0;
         uint16_t n = 0;
         uint16_t left;
         while ((left = left_childs[n])) {
-            float val = X[r*cols + split_col[n]];
-            n = (val <= split_lo[n]) ? left :
-                (val <= split_hi[n]) ? mid_childs[n] :
+            float split_val = X[r*cols + split_col[n]];
+            row_val += coefs[n] * split_val;
+
+            n = (split_val <= split_lo[n] || coefs[n]) ? left :
+                (split_val <= split_hi[n]) ? mid_childs[n] :
                 right_childs[n];
         }
-        out[r] = node_means[n];
+        out[r] = row_val + node_means[n];
 
     }
     gettimeofday(&loop_stop, NULL);

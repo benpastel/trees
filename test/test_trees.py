@@ -110,22 +110,22 @@ def test_fit_tree():
 
 def test_eval_tree():
   #     1:(1,100)
-  #   /    |      \
-  #  /     |       \
-  # 1   0:(10,10)   9
-  #      /   |   \
-  #     3   empty 2
+  #    /    |      \
+  #   /     |       \
+  # +1   0:(10,10)  +2x_1
+  #      /   |   \    \
+  #    +3   +0   +2   +9
   #
   tree = Tree(
-    node_count = 7,
-    split_cols     = np.array([1,   0,  0, 0, 0, 0, 0], dtype=np.uint64),
-    split_lo_vals  = np.array([1,   0, 10, 0, 0, 0, 0], dtype=np.float32),
-    split_hi_vals  = np.array([100, 0, 10, 0, 0, 0, 0], dtype=np.float32),
-    coefs          = np.array([0,   0,  0, 0, 0, 0, 0], dtype=np.float32),
-    left_children  = np.array([1,   0,  4, 0, 0, 0, 0], dtype=np.uint16),
-    mid_children   = np.array([2,   0,  5, 0, 0, 0, 0], dtype=np.uint16),
-    right_children = np.array([3,   0,  6, 0, 0, 0, 0], dtype=np.uint16),
-    node_means     = np.array([0,   1,  0, 9, 3, 0, 2], dtype=np.double),
+    node_count = 8,
+    split_cols     = np.array([1,   0,  0,  1, 0, 0, 0, 0], dtype=np.uint64),
+    split_lo_vals  = np.array([1,   0, 10,  0, 0, 0, 0, 0], dtype=np.float32),
+    split_hi_vals  = np.array([100, 0, 10,  0, 0, 0, 0, 0], dtype=np.float32),
+    coefs          = np.array([0,   0,  0,  2, 0, 0, 0, 0], dtype=np.float32),
+    left_children  = np.array([1,   0,  4,  7, 0, 0, 0, 0], dtype=np.uint16),
+    mid_children   = np.array([2,   0,  5,  0, 0, 0, 0, 0], dtype=np.uint16),
+    right_children = np.array([3,   0,  6,  0, 0, 0, 0, 0], dtype=np.uint16),
+    node_means     = np.array([0,   1,  0, 18, 3, 0, 2, 9], dtype=np.double),
   )
 
   X = np.array([
@@ -140,7 +140,7 @@ def test_eval_tree():
       3,
       2,
       1,
-      9
+      211
     ]))
 
 
