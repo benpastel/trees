@@ -30,7 +30,7 @@ static float msec(struct timeval t0, struct timeval t1)
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *XT_bin_arg, *XT_reg_arg, *y_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg, *coefs_arg;
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *preds_arg;
     double smooth_factor_arg;
@@ -47,15 +47,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     long split_ms = 0;
     gettimeofday(&total_start, NULL);
 
-
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!O!di",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!O!O!di",
         &PyArray_Type, &XT_bin_arg,
         &PyArray_Type, &XT_reg_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
         &PyArray_Type, &split_lo_arg,
         &PyArray_Type, &split_hi_arg,
+        &PyArray_Type, &coefs_arg,
         &PyArray_Type, &left_childs_arg,
         &PyArray_Type, &mid_childs_arg,
         &PyArray_Type, &right_childs_arg,
@@ -69,9 +69,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *XT_bin_obj = PyArray_FROM_OTF(XT_bin_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *XT_reg_obj = PyArray_FROM_OTF(XT_reg_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
+    PyObject *coefs_obj = PyArray_FROM_OTF(coefs_arg, NPY_FLOAT32, NPY_ARRAY_OUT_ARRAY);
+
     PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
@@ -84,6 +87,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         split_col_obj == NULL ||
         split_lo_obj == NULL ||
         split_hi_obj == NULL ||
+        coefs_obj == NULL ||
         left_childs_obj == NULL ||
         mid_childs_obj == NULL ||
         right_childs_obj == NULL ||
@@ -96,6 +100,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_XDECREF(split_col_obj);
         Py_XDECREF(split_lo_obj);
         Py_XDECREF(split_hi_obj);
+        Py_XDECREF(coefs_obj);
         Py_XDECREF(left_childs_obj);
         Py_XDECREF(mid_childs_obj);
         Py_XDECREF(right_childs_obj);
@@ -113,6 +118,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
     uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
     uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    float *    restrict coefs        = PyArray_DATA((PyArrayObject *) coefs_obj);
     uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
@@ -378,6 +384,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(split_col_obj);
     Py_DECREF(split_lo_obj);
     Py_DECREF(split_hi_obj);
+    Py_DECREF(coefs_obj);
     Py_DECREF(left_childs_obj);
     Py_DECREF(mid_childs_obj);
     Py_DECREF(right_childs_obj);
@@ -402,7 +409,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg, *coefs_arg;
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *out_arg;
 
@@ -413,11 +420,12 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     gettimeofday(&total_start, NULL);
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &split_col_arg,
         &PyArray_Type, &split_lo_arg,
         &PyArray_Type, &split_hi_arg,
+        &PyArray_Type, &coefs_arg,
         &PyArray_Type, &left_childs_arg,
         &PyArray_Type, &mid_childs_arg,
         &PyArray_Type, &right_childs_arg,
@@ -425,19 +433,24 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
     PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *coefs_obj = PyArray_FROM_OTF(coefs_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+
     PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
     PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         split_col_obj == NULL ||
         split_lo_obj == NULL ||
         split_hi_obj == NULL ||
+        coefs_obj == NULL |
         left_childs_obj == NULL ||
         mid_childs_obj == NULL ||
         right_childs_obj == NULL ||
@@ -448,6 +461,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         Py_XDECREF(split_col_obj);
         Py_XDECREF(split_lo_obj);
         Py_XDECREF(split_hi_obj);
+        Py_XDECREF(coefs_obj);
         Py_XDECREF(left_childs_obj);
         Py_XDECREF(mid_childs_obj);
         Py_XDECREF(right_childs_obj);
@@ -461,6 +475,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
     float *    restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
     float *    restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    float *    restrict coefs        = PyArray_DATA((PyArrayObject *) coefs_obj);
     uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
@@ -491,6 +506,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(split_col_obj);
     Py_DECREF(split_lo_obj);
     Py_DECREF(split_hi_obj);
+    Py_DECREF(coefs_obj);
     Py_DECREF(left_childs_obj);
     Py_DECREF(mid_childs_obj);
     Py_DECREF(right_childs_obj);

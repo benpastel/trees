@@ -121,6 +121,7 @@ def test_eval_tree():
     split_cols     = np.array([1,   0,  0, 0, 0, 0, 0], dtype=np.uint64),
     split_lo_vals  = np.array([1,   0, 10, 0, 0, 0, 0], dtype=np.float32),
     split_hi_vals  = np.array([100, 0, 10, 0, 0, 0, 0], dtype=np.float32),
+    coefs          = np.array([0,   0,  0, 0, 0, 0, 0], dtype=np.float32),
     left_children  = np.array([1,   0,  4, 0, 0, 0, 0], dtype=np.uint16),
     mid_children   = np.array([2,   0,  5, 0, 0, 0, 0], dtype=np.uint16),
     right_children = np.array([3,   0,  6, 0, 0, 0, 0], dtype=np.uint16),
