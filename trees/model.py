@@ -109,7 +109,7 @@ def fit(
   assert y.shape == (rows,)
   targets_are_float = (y.dtype != np.bool)
 
-  X = X.astype(np.float32, copy=False)
+  X = X.astype(np.float32, copy=True) # TODO reduce copies
   mean_xs = np.mean(X, axis=0)
   X -= mean_xs
   XT_reg = X.T.copy()
