@@ -18,13 +18,16 @@ class Tree:
   node_means: np.ndarray
 
 def fit_tree(
-    XT: np.ndarray,
+    XT_bin: np.ndarray,
+    XT_reg: np.ndarray,
     y: np.ndarray,
     bins: np.ndarray,
     params: Params
 ) -> Tuple[Tree, np.ndarray]:
-  feats, rows = XT.shape
-  assert XT.dtype == np.uint8
+  feats, rows = XT_bin.shape
+  assert XT_bin.dtype == np.uint8
+  assert XT_reg.dtype == np.float32
+  assert XT_reg.shape == (feats, rows)
   assert y.dtype == np.double
   assert y.shape == (rows,)
   assert bins.shape == (feats, 255)
@@ -48,7 +51,8 @@ def fit_tree(
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
-    XT,
+    XT_bin,
+    XT_reg,
     y,
     split_cols,
     split_lo_bins,

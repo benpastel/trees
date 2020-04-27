@@ -3,6 +3,9 @@ __pycache__/
 .mypy_cache/
 tree.egg-info/
 data/
+.DS_Store
+
+# TODO clean up build
 trees/c/build/
 trees/c/*.so
-.DS_Store
+trees/c/trees/c/tree.o

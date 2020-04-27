@@ -25,7 +25,7 @@ def test_fit_tree():
     [3, 3],
     [4, 0],
     [5, 5],
-  ], dtype=np.uint8)
+  ])
   y = np.array([2, 1, 0, 2, 1, 0], dtype=np.double)
   bins = np.array([
     np.arange(255, dtype=np.float32),
@@ -33,7 +33,8 @@ def test_fit_tree():
   ])
 
   tree, preds = fit_tree(
-    X.T,
+    X.T.astype(np.uint8),
+    X.T.astype(np.float32),
     y,
     bins,
     Params(smooth_factor=1.0)
@@ -56,11 +57,12 @@ def test_fit_tree():
   #       /      |      \
   # [0,2,2,3]   [9,7]  [100,100,100]
   #
-  X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
+  X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100]).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
-    X.T,
+    X.T.astype(np.uint8),
+    X.T.astype(np.float32),
     y,
     bins,
     Params(smooth_factor=1.0)
@@ -84,11 +86,12 @@ def test_fit_tree():
   #  /  |  \    /  |   \
   # 0 [2,2] 3  7 empty  9
   #
-  X = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.uint8).reshape((-1, 1))
+  X = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20]).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.double)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
-    X.T,
+    X.T.astype(np.uint8),
+    X.T.astype(np.float32),
     y,
     bins,
     Params(smooth_factor=0.0)

@@ -29,7 +29,7 @@ static float msec(struct timeval t0, struct timeval t1)
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
-    PyObject *X_arg, *y_arg;
+    PyObject *XT_bin_arg, *XT_reg_arg, *y_arg;
     PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *preds_arg;
@@ -49,8 +49,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!di",
-        &PyArray_Type, &X_arg,
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!O!di",
+        &PyArray_Type, &XT_bin_arg,
+        &PyArray_Type, &XT_reg_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
         &PyArray_Type, &split_lo_arg,
@@ -65,7 +66,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const double smooth_factor = smooth_factor_arg;
     const int max_depth = max_depth_arg;
 
-    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *XT_bin_obj = PyArray_FROM_OTF(XT_bin_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *XT_reg_obj = PyArray_FROM_OTF(XT_reg_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
@@ -76,7 +78,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
     PyObject *preds_obj = PyArray_FROM_OTF(preds_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
-    if (X_obj == NULL ||
+    if (XT_bin_obj == NULL ||
+        XT_reg_obj == NULL ||
         y_obj == NULL ||
         split_col_obj == NULL ||
         split_lo_obj == NULL ||
@@ -87,7 +90,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         node_mean_obj == NULL ||
         preds_obj == NULL)
     {
-        Py_XDECREF(X_obj);
+        Py_XDECREF(XT_bin_obj);
+        Py_XDECREF(XT_reg_obj);
         Py_XDECREF(y_obj);
         Py_XDECREF(split_col_obj);
         Py_XDECREF(split_lo_obj);
@@ -100,9 +104,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         return NULL;
     }
 
-    // cast data sections of numpy arrays to plain C pointers
-    // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    // convert data sections of numpy arrays to plain C pointers
+    // the arrays should already be C-order, aligned, non-strided
+    // otherwise PyArray_DATA will copy
+    uint8_t *  restrict XT_bin       = PyArray_DATA((PyArrayObject *) XT_bin_obj);
+    float *    restrict XT_reg       = PyArray_DATA((PyArrayObject *) XT_reg_obj);
     double *   restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
     uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
@@ -113,8 +119,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) XT_bin_obj, 1);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) XT_bin_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
     const uint64_t vals = 256;
 
@@ -188,7 +194,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             // stats
             for (uint64_t r = 0; r < rows; r++) {
-                uint32_t v = X[c*rows + r];
+                uint32_t v = XT_bin[c*rows + r];
                 uint32_t n = memberships[r];
                 uint32_t idx = n*vals + v;
                 counts[idx]++;
@@ -329,7 +335,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             uint16_t n = memberships[r];
             if (!should_split[n]) continue;
 
-            uint8_t v = X[split_col[n]*rows + r];
+            uint8_t v = XT_bin[split_col[n]*rows + r];
 
             uint16_t child = (
                 v <= split_lo[n] ? left_childs[n] :
@@ -366,7 +372,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
 
     free(memberships);
-    Py_DECREF(X_obj);
+    Py_DECREF(XT_bin_obj);
+    Py_DECREF(XT_reg_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
     Py_DECREF(split_lo_obj);

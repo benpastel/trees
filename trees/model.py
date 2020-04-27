@@ -14,7 +14,8 @@ from trees.utils import timed
 class Model:
   trees: List[Tree]
   targets_are_float: bool
-  mean: float
+  mean_y: float
+  mean_xs: np.ndarray
 
   def __str__(self, verbose = False):
     model_type = "Regression" if self.targets_are_float else "Classification"
@@ -108,33 +109,38 @@ def fit(
   assert y.shape == (rows,)
   targets_are_float = (y.dtype != np.bool)
 
-  # TODO support multiple dtypes to avoid copy
   X = X.astype(np.float32, copy=False)
+  mean_xs = np.mean(X, axis=0)
+  X -= mean_xs
+  XT_reg = X.T.copy()
+  bins = choose_bins(X)
+  XT_bin = apply_bins(X, bins)
+
   y = y.astype(np.double, copy=False)
   mean_y = np.mean(y)
   preds = np.full(rows, mean_y, dtype=np.double)
 
-  bins = choose_bins(X)
-  XT = apply_bins(X, bins)
-  assert XT.dtype == np.uint8
+  assert XT_bin.dtype == np.uint8
+  assert XT_reg.dtype == np.float32
+  assert XT_bin.shape == XT_reg.shape
 
   trees = []
   for t in range(params.tree_count):
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(XT, target, bins, params)
+    tree, new_preds = fit_tree(XT_bin, XT_reg, target, bins, params)
     trees.append(tree)
 
     preds += new_preds
 
-  return Model(trees, targets_are_float, mean_y), preds
+  return Model(trees, targets_are_float, mean_y, mean_xs), preds
 
 
 def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
-  X = X.astype(np.float32, copy=False)
+  X = X.astype(np.float32, copy=False) - model.mean_xs
 
-  values = np.full(len(X), model.mean, dtype=np.double)
+  values = np.full(len(X), model.mean_y, dtype=np.double)
 
   for tree in model.trees:
     values += eval_tree(tree, X)
