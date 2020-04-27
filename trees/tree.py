@@ -36,7 +36,6 @@ def fit_tree(
   max_nodes = min(params.max_nodes, max_nodes_from_depth)
   assert 0 < max_nodes < 2**16
 
-
   # output arrays for c function
   # pre-allocated to the max number of nodes
   split_cols = np.zeros(max_nodes, dtype=np.uint64)

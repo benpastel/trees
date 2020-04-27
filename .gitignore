@@ -1,6 +1,7 @@
 __pycache__/
 .pytest_cache/
 .mypy_cache/
+tree.egg-info/
 data/
 trees/c/build/
 trees/c/*.so

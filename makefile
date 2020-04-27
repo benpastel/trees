@@ -2,7 +2,7 @@ COMPILED_C_FILE := trees/c/tree.cpython-38-darwin.so
 
 build:
 	-rm $(COMPILED_C_FILE) # TODO make properly
-	cd trees/c && python setup.py build_ext --inplace
+	python setup.py build_ext --build-lib trees/c --build-temp trees/c
 
 test: build
 	python -m pytest
