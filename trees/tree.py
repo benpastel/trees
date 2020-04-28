@@ -20,7 +20,7 @@ class Tree:
   mid_children: np.ndarray
   right_children: np.ndarray
 
-  node_means: np.ndarray
+  node_adders: np.ndarray
 
 def fit_tree(
     XT_bin: np.ndarray,
@@ -54,7 +54,7 @@ def fit_tree(
   mid_children = np.zeros(max_nodes, dtype=np.uint16)
   right_children = np.zeros(max_nodes, dtype=np.uint16)
 
-  node_means = np.zeros(max_nodes, dtype=np.double)
+  node_adders = np.zeros(max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
@@ -68,7 +68,7 @@ def fit_tree(
     left_children,
     mid_children,
     right_children,
-    node_means,
+    node_adders,
     preds,
     params.smooth_factor,
     params.max_depth)
@@ -90,7 +90,7 @@ def fit_tree(
     left_children[:node_count],
     mid_children[:node_count],
     right_children[:node_count],
-    node_means[:node_count]
+    node_adders[:node_count]
   ), preds
 
 
@@ -109,7 +109,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
     tree.left_children,
     tree.mid_children,
     tree.right_children,
-    tree.node_means,
+    tree.node_adders,
     values)
   return values
 
