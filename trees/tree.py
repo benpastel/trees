@@ -15,12 +15,12 @@ class Tree:
   split_hi_vals: np.ndarray
 
   coefs: np.ndarray
+  intercepts: np.ndarray
 
   left_children: np.ndarray
   mid_children: np.ndarray
   right_children: np.ndarray
 
-  node_adders: np.ndarray
 
 def fit_tree(
     XT_bin: np.ndarray,
@@ -50,11 +50,11 @@ def fit_tree(
   split_lo_bins = np.zeros(max_nodes, dtype=np.uint8)
   split_hi_bins = np.zeros(max_nodes, dtype=np.uint8)
   coefs = np.zeros(max_nodes, dtype=np.float32)
+  intercepts = np.zeros(max_nodes, dtype=np.float32)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
   mid_children = np.zeros(max_nodes, dtype=np.uint16)
   right_children = np.zeros(max_nodes, dtype=np.uint16)
 
-  node_adders = np.zeros(max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
@@ -65,10 +65,10 @@ def fit_tree(
     split_lo_bins,
     split_hi_bins,
     coefs,
+    intercepts,
     left_children,
     mid_children,
     right_children,
-    node_adders,
     preds,
     params.smooth_factor,
     params.max_depth)
@@ -87,10 +87,10 @@ def fit_tree(
     split_lo_vals,
     split_hi_vals,
     coefs[:node_count],
+    intercepts[:node_count],
     left_children[:node_count],
     mid_children[:node_count],
-    right_children[:node_count],
-    node_adders[:node_count]
+    right_children[:node_count]
   ), preds
 
 
@@ -106,10 +106,10 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
     tree.split_lo_vals,
     tree.split_hi_vals,
     tree.coefs,
+    tree.intercepts,
     tree.left_children,
     tree.mid_children,
     tree.right_children,
-    tree.node_adders,
     values)
   return values
 

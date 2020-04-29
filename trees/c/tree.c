@@ -30,8 +30,9 @@ static float msec(struct timeval t0, struct timeval t1)
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *XT_bin_arg, *XT_reg_arg, *y_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg, *coefs_arg;
-    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_adder_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *coefs_arg, *intercepts_arg;
+    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg;
     PyObject *preds_arg;
     double smooth_factor_arg;
     int max_depth_arg;
@@ -56,10 +57,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &split_lo_arg,
         &PyArray_Type, &split_hi_arg,
         &PyArray_Type, &coefs_arg,
+        &PyArray_Type, &intercepts_arg,
         &PyArray_Type, &left_childs_arg,
         &PyArray_Type, &mid_childs_arg,
         &PyArray_Type, &right_childs_arg,
-        &PyArray_Type, &node_adder_arg,
         &PyArray_Type, &preds_arg,
         &smooth_factor_arg,
         &max_depth_arg)) return NULL;
@@ -74,11 +75,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
     PyObject *coefs_obj = PyArray_FROM_OTF(coefs_arg, NPY_FLOAT32, NPY_ARRAY_OUT_ARRAY);
+    PyObject *intercepts_obj = PyArray_FROM_OTF(intercepts_arg, NPY_FLOAT32, NPY_ARRAY_OUT_ARRAY);
 
     PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *node_adder_obj = PyArray_FROM_OTF(node_adder_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
     PyObject *preds_obj = PyArray_FROM_OTF(preds_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (XT_bin_obj == NULL ||
@@ -88,10 +89,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         split_lo_obj == NULL ||
         split_hi_obj == NULL ||
         coefs_obj == NULL ||
+        intercepts_obj == NULL ||
         left_childs_obj == NULL ||
         mid_childs_obj == NULL ||
         right_childs_obj == NULL ||
-        node_adder_obj == NULL ||
         preds_obj == NULL)
     {
         Py_XDECREF(XT_bin_obj);
@@ -101,10 +102,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         Py_XDECREF(split_lo_obj);
         Py_XDECREF(split_hi_obj);
         Py_XDECREF(coefs_obj);
+        Py_XDECREF(intercepts_obj);
         Py_XDECREF(left_childs_obj);
         Py_XDECREF(mid_childs_obj);
         Py_XDECREF(right_childs_obj);
-        Py_XDECREF(node_adder_obj);
         Py_XDECREF(preds_obj);
         return NULL;
     }
@@ -119,10 +120,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
     uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
     float *    restrict coefs        = PyArray_DATA((PyArrayObject *) coefs_obj);
+    float *    restrict intercepts   = PyArray_DATA((PyArrayObject *) intercepts_obj);
     uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
-    double *   restrict node_adders   = PyArray_DATA((PyArrayObject *) node_adder_obj);
     double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) XT_bin_obj, 1);
@@ -182,7 +183,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const double root_var = (root_sum_sq / rows) - root_mean * root_mean;
     const double penalty = root_var * smooth_factor;
     node_counts[0] = rows;
-    node_adders[0] = root_mean;
+    intercepts[0] = root_mean;
     node_scores[0] = root_var;
 
     gettimeofday(&init_end, NULL);
@@ -381,7 +382,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 node_counts[left_childs[n]] = left_counts[n];
 
-                // all node adders are 0
+                // all intercepts are 0
 
                 new_node_count += 1;
             } else if (should_split[n] && new_node_count <= max_nodes - 3) {
@@ -398,9 +399,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_counts[mid_childs[n]] = mid_counts[n];
                 node_counts[right_childs[n]] = right_counts[n];
 
-                node_adders[left_childs[n]] = left_sums[n] / left_counts[n];
-                node_adders[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_sums[n] / mid_counts[n];
-                node_adders[right_childs[n]] = right_sums[n] / right_counts[n];
+                intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
+                intercepts[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_sums[n] / mid_counts[n];
+                intercepts[right_childs[n]] = right_sums[n] / right_counts[n];
 
                 new_node_count += 3;
             } else if (should_split[n]) {
@@ -427,7 +428,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             memberships[r] = child;
 
-            preds[r] += node_adders[child] + coefs[n] * reg_v;
+            // TODO this mixing of child and n doesn't seem right
+            preds[r] += intercepts[child] + coefs[n] * reg_v;
         }
         done_count = node_count;
         node_count = new_node_count;
@@ -452,10 +454,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(split_lo_obj);
     Py_DECREF(split_hi_obj);
     Py_DECREF(coefs_obj);
+    Py_DECREF(intercepts_obj);
     Py_DECREF(left_childs_obj);
     Py_DECREF(mid_childs_obj);
     Py_DECREF(right_childs_obj);
-    Py_DECREF(node_adder_obj);
     Py_DECREF(preds_obj);
 
     gettimeofday(&total_end, NULL);
@@ -476,8 +478,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg, *coefs_arg;
-    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_adder_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *coefs_arg, *intercepts_arg;
+    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg;
     PyObject *out_arg;
 
     struct timeval total_start;
@@ -493,10 +496,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &split_lo_arg,
         &PyArray_Type, &split_hi_arg,
         &PyArray_Type, &coefs_arg,
+        &PyArray_Type, &intercepts_arg,
         &PyArray_Type, &left_childs_arg,
         &PyArray_Type, &mid_childs_arg,
         &PyArray_Type, &right_childs_arg,
-        &PyArray_Type, &node_adder_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
@@ -505,11 +508,11 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *coefs_obj = PyArray_FROM_OTF(coefs_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *intercepts_obj = PyArray_FROM_OTF(intercepts_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
 
     PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *node_adder_obj = PyArray_FROM_OTF(node_adder_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
     PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
@@ -517,11 +520,11 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         split_col_obj == NULL ||
         split_lo_obj == NULL ||
         split_hi_obj == NULL ||
-        coefs_obj == NULL |
+        coefs_obj == NULL ||
+        intercepts_obj == NULL ||
         left_childs_obj == NULL ||
         mid_childs_obj == NULL ||
         right_childs_obj == NULL ||
-        node_adder_obj == NULL ||
         out_obj == NULL)
     {
         Py_XDECREF(X_obj);
@@ -529,10 +532,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         Py_XDECREF(split_lo_obj);
         Py_XDECREF(split_hi_obj);
         Py_XDECREF(coefs_obj);
+        Py_XDECREF(intercepts_obj);
         Py_XDECREF(left_childs_obj);
         Py_XDECREF(mid_childs_obj);
         Py_XDECREF(right_childs_obj);
-        Py_XDECREF(node_adder_obj);
         Py_XDECREF(out_obj);
         return NULL;
     }
@@ -543,10 +546,10 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     float *    restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
     float *    restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
     float *    restrict coefs        = PyArray_DATA((PyArrayObject *) coefs_obj);
+    float *    restrict intercepts   = PyArray_DATA((PyArrayObject *) intercepts_obj);
     uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
     uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
     uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
-    double *   restrict node_adders  = PyArray_DATA((PyArrayObject *) node_adder_obj);
     double *   restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
@@ -560,7 +563,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         do {
             float v = X[r*cols + split_col[n]];
 
-            row_val += node_adders[n] + coefs[n] * v;
+            row_val += intercepts[n] + coefs[n] * v;
 
             n = (v <= split_lo[n] || coefs[n]) ? left_childs[n] :
                 (v <= split_hi[n]) ? mid_childs[n] :
@@ -578,7 +581,6 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(left_childs_obj);
     Py_DECREF(mid_childs_obj);
     Py_DECREF(right_childs_obj);
-    Py_DECREF(node_adder_obj);
     Py_DECREF(out_obj);
 
     gettimeofday(&total_stop, NULL);
