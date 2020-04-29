@@ -175,9 +175,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         root_sum_sq += y[r] * y[r];
     }
     const double root_mean = root_sum / rows;
-    for (uint64_t r = 0; r < rows; r++) {
-        preds[r] = root_mean;
-    }
 
     // TODO separate bin & reg penalties (they may generalize differently!)
     const double root_var = (root_sum_sq / rows) - root_mean * root_mean;
@@ -193,23 +190,23 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         gettimeofday(&stat_start, NULL);
 
-        #pragma omp parallel for
+        // #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
 
             // linear regression stats
             // t means the residual target (y - pred)
             // TODO try heap?
-            double * restrict x_sums = calloc(node_count, sizeof(double));
-            double * restrict t_sums = calloc(node_count, sizeof(double));
-            double * restrict xt_sums = calloc(node_count, sizeof(double));
-            double * restrict x_sum_sqs = calloc(node_count, sizeof(double));
-            double * restrict t_sum_sqs = calloc(node_count, sizeof(double));
+            float * restrict x_sums = calloc(node_count, sizeof(float));
+            float * restrict t_sums = calloc(node_count, sizeof(float));
+            float * restrict xt_sums = calloc(node_count, sizeof(float));
+            float * restrict x_sum_sqs = calloc(node_count, sizeof(float));
+            float * restrict t_sum_sqs = calloc(node_count, sizeof(float));
 
             // stats
             for (uint64_t r = 0; r < rows; r++) {
-                double v = XT_reg[c*rows + r];
+                float v = XT_reg[c*rows + r];
                 uint32_t n = memberships[r];
-                double target = y[r] - preds[r];
+                float target = y[r] - preds[r];
                 x_sums[n] += v;
                 t_sums[n] += target;
                 xt_sums[n] += v * target;
@@ -218,44 +215,64 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
 
             // check linear regressions
-            // for (uint16_t n = done_count; n < node_count; n++) {
-            //     if (node_counts[n] < 2 || !xt_sums[n] || !x_sum_sqs[n]) continue;
+            // TODO Bessel's corrections?
+            for (uint16_t n = done_count; n < node_count; n++) {
+                if (node_counts[n] < 2 || !xt_sums[n] || !x_sum_sqs[n]) continue;
 
-            //     double coef = xt_sums[n] / x_sum_sqs[n];
+                // coef = cov(x,y) / var(x)
+                //      = [ Σxy/N - (Σx/N)(Σy/N) ] / [ Σx^2/N - (Σx/N)^2 ]
+                //      = [ Σxy - (Σx)(Σy)/N ] / [ Σx^2 - (Σx)(Σx)/N ]
+                double coef = (xt_sums[n] - x_sums[n] * t_sums[n] / node_counts[n])
+                          / (x_sum_sqs[n] - x_sums[n] * x_sums[n] / node_counts[n]);
 
-            //     // err = Σ (t - cx)^2
-            //     //     = Σ [t^2 - 2cxy - c^2 x^2 ]
-            //     //     = Σt^2 - 2c Σxt - c^2 Σx^2
-            //     double err = t_sum_sqs[n] - 2 * coef * xt_sums[n] + coef * coef * x_sum_sqs[n];
+                // intercept:
+                // a = Σy/N - cΣx/N
+                double a = (t_sums[n] - coef * x_sums[n]) / node_counts[n];
 
-            //     double score = (err + penalty) / node_counts[n];
+                // sum of squared error:
+                // err = Σ (t - pred)^2
+                //     = Σ (t - cx - a))^2
+                //     = Σ [t^2     - cxt        - at
+                //        + c^2 x^2 - cxt + acx
+                //        + a^2           + acx  - at]
+                //     = Σt^2 + c^2 Σx^2 + Na^2 - 2cΣxt + 2acΣx - 2aΣt
+                double err = t_sum_sqs[n] + coef*coef*x_sum_sqs[n] + node_counts[n]*a*a
+                    - 2*coef*xt_sums[n] + 2*a*coef*x_sums[n] - 2*a*t_sums[n];
 
-            //     if (score < node_scores[n]) {
-            //         omp_set_lock(&node_locks[n]);
-            //         if (score < node_scores[n]) {
-            //             node_scores[n] = score;
-            //             split_col[n] = c;
-            //             coefs[n] = coef;
-            //             split_lo[n] = 0;
-            //             split_hi[n] = 0;
+                if (err < 0) {
+                    printf("bad error: %f\n", err);
+                    return NULL;
+                }
 
-            //             left_counts[n] = node_counts[n];
-            //             mid_counts[n] = 0;
-            //             right_counts[n] = 0;
+                double score = (err + penalty) / node_counts[n];
 
-            //             left_sums[n] = t_sums[n] - coef * x_sums[n];
-            //             mid_sums[n] = 0.0;
-            //             right_sums[n] = 0.0;
+                if (score < node_scores[n]) {
+                    omp_set_lock(&node_locks[n]);
+                    if (score < node_scores[n]) {
+                        node_scores[n] = score;
+                        split_col[n] = c;
+                        coefs[n] = coef;
+                        intercepts[n] = a;
+                        split_lo[n] = 0;
+                        split_hi[n] = 0;
 
-            //             left_vars[n] = err;
-            //             mid_vars[n] = 0.0;
-            //             right_vars[n] = 0.0;
+                        left_counts[n] = node_counts[n];
+                        mid_counts[n] = 0;
+                        right_counts[n] = 0;
 
-            //             should_split[n] = true;
-            //         }
-            //         omp_unset_lock(&node_locks[n]);
-            //     }
-            // }
+                        left_sums[n] = t_sums[n] - coef * x_sums[n] - a;
+                        mid_sums[n] = 0.0;
+                        right_sums[n] = 0.0;
+
+                        left_vars[n] = err;
+                        mid_vars[n] = 0.0;
+                        right_vars[n] = 0.0;
+
+                        should_split[n] = true;
+                    }
+                    omp_unset_lock(&node_locks[n]);
+                }
+            }
 
             // bin stats
             // TODO rename
@@ -333,6 +350,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 node_scores[n] = score;
                                 split_col[n] = c;
                                 coefs[n] = 0.0;
+                                intercepts[n] = 0.0;
                                 split_lo[n] = lo;
                                 split_hi[n] = hi;
 
@@ -352,8 +370,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             }
                             omp_unset_lock(&node_locks[n]);
                         }
-                        // if (hi < 5)
-                        //     printf("    %llu split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", c, lo, hi, left_var, mid_var, right_var, score);
+                        if (left_var < 0 || mid_var < 0 || right_var < 0) {
+                            printf("bad vars: (%f, %f, %f)\n", left_var, mid_var, right_var);
+                            return NULL;
+                        }
                     }
                 }
             }
@@ -382,10 +402,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 node_counts[left_childs[n]] = left_counts[n];
 
-                // all intercepts are 0
+                // TODO this is always 0?
+                // intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
 
                 new_node_count += 1;
             } else if (should_split[n] && new_node_count <= max_nodes - 3) {
+                // TODO if the middle is empty we don't need to make a node
                 // splitting node
                 left_childs[n] = new_node_count;
                 mid_childs[n] = new_node_count + 1;
@@ -399,9 +421,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_counts[mid_childs[n]] = mid_counts[n];
                 node_counts[right_childs[n]] = right_counts[n];
 
-                intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
-                intercepts[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_sums[n] / mid_counts[n];
-                intercepts[right_childs[n]] = right_sums[n] / right_counts[n];
+                // intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
+                // intercepts[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_sums[n] / mid_counts[n];
+                // intercepts[right_childs[n]] = right_sums[n] / right_counts[n];
 
                 new_node_count += 3;
             } else if (should_split[n]) {
@@ -428,8 +450,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             memberships[r] = child;
 
-            // TODO this mixing of child and n doesn't seem right
-            preds[r] += intercepts[child] + coefs[n] * reg_v;
+            preds[r] += coefs[n] * reg_v + intercepts[n];
         }
         done_count = node_count;
         node_count = new_node_count;
@@ -441,6 +462,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         split_ms += msec(split_start, split_end);
     }
     gettimeofday(&post_start, NULL);
+
+    // fill out leaf means
+    // TODO track leaf means as we go to avoid these passes?
+    for (uint64_t r = 0; r < rows; r++) {
+        uint16_t n = memberships[r];
+        intercepts[n] += (y[r] - preds[r]) / node_counts[n];
+    }
+    for (uint64_t r = 0; r < rows; r++) {
+        uint16_t n = memberships[r];
+        preds[r] += intercepts[n];
+    }
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         omp_destroy_lock(&node_locks[n]);

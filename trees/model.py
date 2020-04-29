@@ -15,7 +15,7 @@ class Model:
   trees: List[Tree]
   targets_are_float: bool
   mean_y: float
-  mean_xs: np.ndarray
+  mean_xs: np.ndarray # TODO remove global X -= np.mean(X)
 
   def __str__(self, verbose = False):
     model_type = "Regression" if self.targets_are_float else "Classification"
