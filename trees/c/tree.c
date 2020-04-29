@@ -147,9 +147,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint64_t mid_counts  [max_nodes];
     uint64_t right_counts[max_nodes];
 
-    double left_sums [max_nodes];
-    double mid_sums  [max_nodes];
-    double right_sums [max_nodes];
+    // double left_sums [max_nodes];
+    // double mid_sums  [max_nodes];
+    // double right_sums [max_nodes];
 
     double left_vars  [max_nodes];
     double mid_vars   [max_nodes];
@@ -196,17 +196,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             // linear regression stats
             // t means the residual target (y - pred)
             // TODO try heap?
-            float * restrict x_sums = calloc(node_count, sizeof(float));
-            float * restrict t_sums = calloc(node_count, sizeof(float));
-            float * restrict xt_sums = calloc(node_count, sizeof(float));
-            float * restrict x_sum_sqs = calloc(node_count, sizeof(float));
-            float * restrict t_sum_sqs = calloc(node_count, sizeof(float));
+            double * restrict x_sums = calloc(node_count, sizeof(double));
+            double * restrict t_sums = calloc(node_count, sizeof(double));
+            double * restrict xt_sums = calloc(node_count, sizeof(double));
+            double * restrict x_sum_sqs = calloc(node_count, sizeof(double));
+            double * restrict t_sum_sqs = calloc(node_count, sizeof(double));
 
             // stats
             for (uint64_t r = 0; r < rows; r++) {
-                float v = XT_reg[c*rows + r];
+                double v = XT_reg[c*rows + r];
                 uint32_t n = memberships[r];
-                float target = y[r] - preds[r];
+                double target = y[r] - preds[r];
                 x_sums[n] += v;
                 t_sums[n] += target;
                 xt_sums[n] += v * target;
@@ -243,10 +243,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double err = t_sum_sqs[n] + coef*coef*x_sum_sqs[n] + node_counts[n]*a*a
                     - 2*coef*xt_sums[n] + 2*a*coef*x_sums[n] - 2*a*t_sums[n];
 
-                if (err < -0.00001) {
-                    printf("bad error: %f\n", err);
-                    return NULL;
-                }
+                // if (err < -0.00001) {
+                //     printf("bad error: %f\n", err);
+                //     // TODO debug
+                //     return NULL;
+                // }
 
                 double score = (err + penalty) / node_counts[n];
 
@@ -264,9 +265,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         mid_counts[n] = 0;
                         right_counts[n] = 0;
 
-                        left_sums[n] = t_sums[n] - coef * x_sums[n] - a;
-                        mid_sums[n] = 0.0;
-                        right_sums[n] = 0.0;
+                        // left_sums[n] = t_sums[n] - coef * x_sums[n] - a;
+                        // mid_sums[n] = 0.0;
+                        // right_sums[n] = 0.0;
 
                         left_vars[n] = err;
                         mid_vars[n] = 0.0;
@@ -345,6 +346,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
 
+                        // if (left_var < -0.00001 || mid_var < -0.00001 || right_var < -0.00001) {
+                        //     printf("bad vars: (%.16f, %.16f, %.16f)\n", left_var, mid_var, right_var);
+                        //     printf("counts: (%llu, %llu, %llu)\n",left_count, mid_count, right_count);
+                        //     printf("sums: (%.16f, %.16f, %.16f)\n", left_sum, mid_sum, right_sum);
+                        //     printf("sum_sqs: (%.16f, %.16f, %.16f)\n", left_sum_sq, mid_sum_sq, right_sum_sq);
+                        //     return NULL;
+                        //     // TODO debug right_var
+                        // }
+
                         // node_scores[n] may be stale, but it only decreases
                         // first check without the lock for efficiency
                         if (score < node_scores[n]) {
@@ -362,9 +372,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 mid_counts[n] = mid_count;
                                 right_counts[n] = right_count;
 
-                                left_sums[n] = left_sum;
-                                mid_sums[n] = mid_sum;
-                                right_sums[n] = right_sum;
+                                // left_sums[n] = left_sum;
+                                // mid_sums[n] = mid_sum;
+                                // right_sums[n] = right_sum;
 
                                 left_vars[n] = left_var;
                                 mid_vars[n] = mid_var;
@@ -373,10 +383,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 should_split[n] = true;
                             }
                             omp_unset_lock(&node_locks[n]);
-                        }
-                        if (left_var < -0.00001 || mid_var < -0.00001 || right_var < -0.00001) {
-                            printf("bad vars: (%f, %f, %f)\n", left_var, mid_var, right_var);
-                            return NULL;
                         }
                     }
                 }
