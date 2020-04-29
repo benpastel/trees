@@ -219,11 +219,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             for (uint16_t n = done_count; n < node_count; n++) {
                 if (node_counts[n] < 2 || !xt_sums[n] || !x_sum_sqs[n]) continue;
 
+
+
                 // coef = cov(x,y) / var(x)
                 //      = [ Σxy/N - (Σx/N)(Σy/N) ] / [ Σx^2/N - (Σx/N)^2 ]
                 //      = [ Σxy - (Σx)(Σy)/N ] / [ Σx^2 - (Σx)(Σx)/N ]
-                double coef = (xt_sums[n] - x_sums[n] * t_sums[n] / node_counts[n])
-                          / (x_sum_sqs[n] - x_sums[n] * x_sums[n] / node_counts[n]);
+                double num = xt_sums[n] - x_sums[n] * t_sums[n] / node_counts[n];
+                double denom = x_sum_sqs[n] - x_sums[n] * x_sums[n] / node_counts[n];
+                if (!denom) continue;
+                double coef = num / denom;
 
                 // intercept:
                 // a = Σy/N - cΣx/N
@@ -239,7 +243,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double err = t_sum_sqs[n] + coef*coef*x_sum_sqs[n] + node_counts[n]*a*a
                     - 2*coef*xt_sums[n] + 2*a*coef*x_sums[n] - 2*a*t_sums[n];
 
-                if (err < 0) {
+                if (err < -0.00001) {
                     printf("bad error: %f\n", err);
                     return NULL;
                 }
@@ -370,7 +374,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             }
                             omp_unset_lock(&node_locks[n]);
                         }
-                        if (left_var < 0 || mid_var < 0 || right_var < 0) {
+                        if (left_var < -0.00001 || mid_var < -0.00001 || right_var < -0.00001) {
                             printf("bad vars: (%f, %f, %f)\n", left_var, mid_var, right_var);
                             return NULL;
                         }
