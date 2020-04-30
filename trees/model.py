@@ -5,7 +5,7 @@ import numpy as np
 from scipy.stats import chi2
 
 from trees.params import Params
-from trees.tree import Tree, fit_tree, eval_tree
+from trees.tree import Tree, fit_tree, eval_tree, describe_tree
 from trees.c.tree import apply_bins as c_apply_bins
 from trees.utils import timed
 
@@ -24,7 +24,7 @@ class Model:
       + f'min={min(sizes)} max={max(sizes)} mean={np.mean(sizes)}')
     if verbose:
       s += ':\n'
-      s += '\n'.join(str(t) for t in self.trees)
+      s += '\n'.join(describe_tree(t) for t in self.trees)
     return s
 
 
@@ -129,8 +129,13 @@ def fit(
     target = params.learning_rate * (y - preds)
 
     tree, new_preds = fit_tree(XT_bin, XT_reg, target, bins, params)
-    trees.append(tree)
 
+    if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
+      # 2 trees with 1 node in a row
+      # don't add the 2nd one, and stop early
+      return Model(trees, targets_are_float, mean_y, mean_xs), preds
+
+    trees.append(tree)
     preds += new_preds
 
   return Model(trees, targets_are_float, mean_y, mean_xs), preds

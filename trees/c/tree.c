@@ -132,7 +132,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t vals = 256;
 
     // TODO: NULL checks
-    // TODO: change y double => float?
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
     uint16_t node_count = 1;
@@ -146,10 +145,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint64_t left_counts [max_nodes];
     uint64_t mid_counts  [max_nodes];
     uint64_t right_counts[max_nodes];
-
-    // double left_sums [max_nodes];
-    // double mid_sums  [max_nodes];
-    // double right_sums [max_nodes];
 
     double left_vars  [max_nodes];
     double mid_vars   [max_nodes];
@@ -178,7 +173,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // TODO separate bin & reg penalties (they may generalize differently!)
     const double root_var = (root_sum_sq / rows) - root_mean * root_mean;
-    const double penalty = root_var * smooth_factor;
+    const double bin_penalty = root_var * smooth_factor;
+    const double reg_penalty = 10.0 * bin_penalty;
     node_counts[0] = rows;
     intercepts[0] = root_mean;
     node_scores[0] = root_var;
@@ -190,7 +186,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         gettimeofday(&stat_start, NULL);
 
-        // #pragma omp parallel for
+        #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
 
             // linear regression stats
@@ -218,8 +214,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             // TODO Bessel's corrections?
             for (uint16_t n = done_count; n < node_count; n++) {
                 if (node_counts[n] < 2 || !xt_sums[n] || !x_sum_sqs[n]) continue;
-
-
 
                 // coef = cov(x,y) / var(x)
                 //      = [ Σxy/N - (Σx/N)(Σy/N) ] / [ Σx^2/N - (Σx/N)^2 ]
@@ -249,7 +243,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 //     return NULL;
                 // }
 
-                double score = (err + penalty) / node_counts[n];
+                double score = (err + reg_penalty) / node_counts[n];
 
                 if (score < node_scores[n]) {
                     omp_set_lock(&node_locks[n]);
@@ -264,10 +258,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         left_counts[n] = node_counts[n];
                         mid_counts[n] = 0;
                         right_counts[n] = 0;
-
-                        // left_sums[n] = t_sums[n] - coef * x_sums[n] - a;
-                        // mid_sums[n] = 0.0;
-                        // right_sums[n] = 0.0;
 
                         left_vars[n] = err;
                         mid_vars[n] = 0.0;
@@ -344,7 +334,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         // TODO try k splits for different k?
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
-                        double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
+                        double score = (left_var + mid_var + right_var + bin_penalty) / node_counts[n];
 
                         // if (left_var < -0.00001 || mid_var < -0.00001 || right_var < -0.00001) {
                         //     printf("bad vars: (%.16f, %.16f, %.16f)\n", left_var, mid_var, right_var);
@@ -371,10 +361,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 left_counts[n] = left_count;
                                 mid_counts[n] = mid_count;
                                 right_counts[n] = right_count;
-
-                                // left_sums[n] = left_sum;
-                                // mid_sums[n] = mid_sum;
-                                // right_sums[n] = right_sum;
 
                                 left_vars[n] = left_var;
                                 mid_vars[n] = mid_var;
@@ -412,9 +398,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 node_counts[left_childs[n]] = left_counts[n];
 
-                // TODO this is always 0?
-                // intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
-
                 new_node_count += 1;
             } else if (should_split[n] && new_node_count <= max_nodes - 3) {
                 // TODO if the middle is empty we don't need to make a node
@@ -430,10 +413,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_counts[left_childs[n]] = left_counts[n];
                 node_counts[mid_childs[n]] = mid_counts[n];
                 node_counts[right_childs[n]] = right_counts[n];
-
-                // intercepts[left_childs[n]] = left_sums[n] / left_counts[n];
-                // intercepts[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_sums[n] / mid_counts[n];
-                // intercepts[right_childs[n]] = right_sums[n] / right_counts[n];
 
                 new_node_count += 3;
             } else if (should_split[n]) {

@@ -21,6 +21,11 @@ class Tree:
   mid_children: np.ndarray
   right_children: np.ndarray
 
+def describe_tree(t: Tree) -> str:
+  leaf_count = np.count_nonzero(~t.left_children)
+  reg_count = np.count_nonzero(t.coefs)
+  split_count = np.count_nonzero(t.right_children)
+  return f'nodes={t.node_count} {leaf_count=} {reg_count=} {split_count=}'
 
 def fit_tree(
     XT_bin: np.ndarray,

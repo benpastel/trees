@@ -295,8 +295,8 @@ if __name__ == '__main__':
     'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
     'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
     'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
-    # 'M5':                  (load_m5,           Params(tree_count=tree_count)),
-    # 'Grupo':               (load_grupo,        Params(tree_count=tree_count))
+    'M5':                  (load_m5,           Params(tree_count=tree_count)),
+    'Grupo':               (load_grupo,        Params(tree_count=tree_count))
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     with timed(f'train our tree with {tree_params}...'):
       # with profiled():
       model, _ = fit(train_X, train_y, tree_params)
-    print(model.__str__(verbose=False))
+    print(model.__str__(verbose=True))
 
     with timed(f'predict our tree...'):
       # with profiled():
