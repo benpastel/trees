@@ -6,3 +6,5 @@ data/
 trees/c/build/
 trees/c/*.so
 .DS_Store
+# TODO clean up build setup
+trees/c/trees/c/tree.o

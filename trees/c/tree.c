@@ -135,7 +135,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         should_split[n] = false;
         omp_init_lock(&node_locks[n]);
 
-        // TODO not strictly necessary
         for (int b = 0; b < branches;   b++) {
             child_counts[n][b] = 0;
             child_sums[n][b] = 0;
@@ -162,7 +161,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     gettimeofday(&init_end, NULL);
 
     int depth = 0;
-    while (depth++ < max_depth && node_count < max_nodes - 2 && done_count < node_count) {
+    while (depth++ < max_depth && node_count < max_nodes - branches - 1 && done_count < node_count) {
 
         gettimeofday(&stat_start, NULL);
 
@@ -281,13 +280,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // update node metadata for the splits
         int new_node_count = node_count;
         for (uint16_t n = 0; n < node_count; n++) {
-            if (should_split[n] && new_node_count <= max_nodes - 3) {
-                childs[n*branches+0] = new_node_count;
-                childs[n*branches+1] = new_node_count + 1;
-                childs[n*branches+2] = new_node_count + 2;
-
+            if (should_split[n] && new_node_count <= max_nodes - branches) {
                 for (int b = 0; b < branches; b++) {
-                    uint16_t child = childs[n*branches+b];
+                    uint16_t child = new_node_count + b;
+
+                    childs[n*branches+b] = child;
+
                     node_scores[child] = (child_counts[n][b] == 0) ? 0 :
                         child_vars[n][b] / child_counts[n][b];
 
@@ -296,7 +294,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     node_sum_sqs[child] = child_sum_sqs[n][b];
                 }
 
-                new_node_count += 3;
+                new_node_count += branches;
             } else if (should_split[n]) {
                 // no room; abort the split
                 should_split[n] = false;
@@ -311,8 +309,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             uint8_t v = X[split_col[n]*rows + r];
 
-            int b = (v <= split_vals[n*splits+0]) ? 0 :
-                    (v <= split_vals[n*splits+1]) ? 1 : 2;
+            int b = 0;
+            while (b < splits && v > split_vals[n*splits+b]) b++;
 
             memberships[r] = childs[n*branches+b];
         }
