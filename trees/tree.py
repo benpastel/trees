@@ -10,11 +10,8 @@ from trees.c.tree import build_tree, eval_tree as c_eval_tree
 class Tree:
   node_count: int
   split_cols: np.ndarray
-  split_lo_vals: np.ndarray
-  split_hi_vals: np.ndarray
-  left_children: np.ndarray
-  mid_children: np.ndarray
-  right_children: np.ndarray
+  split_vals: np.ndarray
+  children: np.ndarray
   node_means: np.ndarray
 
 def fit_tree(
@@ -29,6 +26,7 @@ def fit_tree(
   assert y.shape == (rows,)
   assert bins.shape == (feats, 255)
   assert bins.dtype == np.float32
+  assert 2 <= params.branch_count <= 8
   assert 0 <= params.smooth_factor
 
   # check if depth constraint imposes a tighter max_nodes
@@ -39,11 +37,8 @@ def fit_tree(
   # output arrays for c function
   # pre-allocated to the max number of nodes
   split_cols = np.zeros(max_nodes, dtype=np.uint64)
-  split_lo_bins = np.zeros(max_nodes, dtype=np.uint8)
-  split_hi_bins = np.zeros(max_nodes, dtype=np.uint8)
-  left_children = np.zeros(max_nodes, dtype=np.uint16)
-  mid_children = np.zeros(max_nodes, dtype=np.uint16)
-  right_children = np.zeros(max_nodes, dtype=np.uint16)
+  split_bins = np.zeros((max_nodes, params.branch_count - 1), dtype=np.uint8)
+  children = np.zeros((max_nodes, params.branch_count), dtype=np.uint16)
   node_means = np.zeros(max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
@@ -51,32 +46,26 @@ def fit_tree(
     XT,
     y,
     split_cols,
-    split_lo_bins,
-    split_hi_bins,
-    left_children,
-    mid_children,
-    right_children,
+    split_bins,
+    children,
     node_means,
     preds,
     params.smooth_factor,
     params.max_depth)
 
   # convert the splits from binned uint8 values => original float32 values
-  split_lo_vals = np.zeros(node_count, dtype=np.float32)
-  split_hi_vals = np.zeros(node_count, dtype=np.float32)
+  split_vals = np.zeros((node_count, params.branch_count - 1), dtype=np.float32)
+
   for n in range(node_count):
-    split_lo_vals[n] = bins[split_cols[n], split_lo_bins[n]]
-    split_hi_vals[n] = bins[split_cols[n], split_hi_bins[n]]
+    for b in range(params.branch_count-1): # TODO vectorize over b
+      split_vals[n, b] = bins[split_cols[n], split_bins[n, b]]
 
   # filter down to the number of nodes we actually used
   return Tree(
     node_count,
     split_cols[:node_count],
-    split_lo_vals,
-    split_hi_vals,
-    left_children[:node_count],
-    mid_children[:node_count],
-    right_children[:node_count],
+    split_vals,
+    children[:node_count,:],
     node_means[:node_count]
   ), preds
 
@@ -90,11 +79,8 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
   c_eval_tree(
     X,
     tree.split_cols,
-    tree.split_lo_vals,
-    tree.split_hi_vals,
-    tree.left_children,
-    tree.mid_children,
-    tree.right_children,
+    tree.split_vals,
+    tree.children,
     tree.node_means,
     values)
   return values

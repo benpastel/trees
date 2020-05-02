@@ -30,9 +30,7 @@ static float msec(struct timeval t0, struct timeval t1)
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg, *y_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
-    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
-    PyObject *preds_arg;
+    PyObject *split_col_arg, *split_val_arg, *childs_arg, *node_mean_arg, *preds_arg;
     double smooth_factor_arg;
     int max_depth_arg;
 
@@ -49,15 +47,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!di",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!di",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
-        &PyArray_Type, &split_lo_arg,
-        &PyArray_Type, &split_hi_arg,
-        &PyArray_Type, &left_childs_arg,
-        &PyArray_Type, &mid_childs_arg,
-        &PyArray_Type, &right_childs_arg,
+        &PyArray_Type, &split_val_arg,
+        &PyArray_Type, &childs_arg,
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &preds_arg,
         &smooth_factor_arg,
@@ -67,34 +62,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
-    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
-    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
-    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
+    PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
+    PyObject *childs_obj = PyArray_FROM_OTF(childs_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
     PyObject *preds_obj = PyArray_FROM_OTF(preds_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         y_obj == NULL ||
         split_col_obj == NULL ||
-        split_lo_obj == NULL ||
-        split_hi_obj == NULL ||
-        left_childs_obj == NULL ||
-        mid_childs_obj == NULL ||
-        right_childs_obj == NULL ||
+        split_val_obj == NULL ||
+        childs_obj == NULL ||
         node_mean_obj == NULL ||
         preds_obj == NULL)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(y_obj);
         Py_XDECREF(split_col_obj);
-        Py_XDECREF(split_lo_obj);
-        Py_XDECREF(split_hi_obj);
-        Py_XDECREF(left_childs_obj);
-        Py_XDECREF(mid_childs_obj);
-        Py_XDECREF(right_childs_obj);
+        Py_XDECREF(split_val_obj);
+        Py_XDECREF(childs_obj);
         Py_XDECREF(node_mean_obj);
         Py_XDECREF(preds_obj);
         return NULL;
@@ -102,21 +89,25 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
+    // TODO shape assertions
     uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
     double *   restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
-    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
-    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
-    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    uint8_t *  restrict split_vals   = PyArray_DATA((PyArrayObject *) split_val_obj);
+    uint16_t * restrict childs       = PyArray_DATA((PyArrayObject *) childs_obj);
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
+    const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) childs_obj, 0);
+    const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
     const uint64_t vals = 256;
+
+    if (branches != 3) {
+        printf("Can't handle branches != 3 yet.\n");
+        return NULL;
+    }
 
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
@@ -130,21 +121,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     bool     should_split [max_nodes];
     omp_lock_t node_locks [max_nodes];
 
-    uint64_t left_counts [max_nodes];
-    uint64_t mid_counts  [max_nodes];
-    uint64_t right_counts[max_nodes];
-
-    double left_sums [max_nodes];
-    double mid_sums  [max_nodes];
-    double right_sums [max_nodes];
-
-    double left_sum_sqs[max_nodes];
-    double mid_sum_sqs[max_nodes];
-    double right_sum_sqs[max_nodes];
-
-    double left_vars  [max_nodes];
-    double mid_vars   [max_nodes];
-    double right_vars [max_nodes];
+    uint64_t child_counts [max_nodes][branches];
+    double child_sums     [max_nodes][branches];
+    double child_sum_sqs  [max_nodes][branches];
+    double child_vars     [max_nodes][branches];
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
@@ -152,10 +132,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         node_sums[n] = 0.0;
         node_sum_sqs[n] = 0.0;
         should_split[n] = false;
-        left_counts[n] = 0;
-        mid_counts[n] = 0;
-        right_counts[n] = 0;
         omp_init_lock(&node_locks[n]);
+
+        // TODO not strictly necessary
+        for (int b = 0; b < branches;   b++) {
+            child_counts[n][b] = 0;
+            child_sums[n][b] = 0;
+            child_sum_sqs[n][b] = 0;
+            child_vars[n][b] = 0;
+        }
     }
 
     // find the baseline of the root
@@ -255,24 +240,24 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             if (score < node_scores[n]) {
                                 node_scores[n] = score;
                                 split_col[n] = c;
-                                split_lo[n] = lo;
-                                split_hi[n] = hi;
+                                split_vals[n*branches+0] = lo;
+                                split_vals[n*branches+1] = hi;
 
-                                left_counts[n] = left_count;
-                                mid_counts[n] = mid_count;
-                                right_counts[n] = right_count;
+                                child_counts[n][0] = left_count;
+                                child_counts[n][1] = mid_count;
+                                child_counts[n][2] = right_count;
 
-                                left_sums[n] = left_sum;
-                                mid_sums[n] = mid_sum;
-                                right_sums[n] = right_sum;
+                                child_sums[n][0] = left_sum;
+                                child_sums[n][1] = mid_sum;
+                                child_sums[n][2] = right_sum;
 
-                                left_sum_sqs[n] = left_sum_sq;
-                                mid_sum_sqs[n] = mid_sum_sq;
-                                right_sum_sqs[n] = right_sum_sq;
+                                child_sum_sqs[n][0] = left_sum_sq;
+                                child_sum_sqs[n][1] = mid_sum_sq;
+                                child_sum_sqs[n][2] = right_sum_sq;
 
-                                left_vars[n] = left_var;
-                                mid_vars[n] = mid_var;
-                                right_vars[n] = right_var;
+                                child_vars[n][0] = left_var;
+                                child_vars[n][1] = mid_var;
+                                child_vars[n][2] = right_var;
 
                                 should_split[n] = true;
                             }
@@ -296,25 +281,19 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         int new_node_count = node_count;
         for (uint16_t n = 0; n < node_count; n++) {
             if (should_split[n] && new_node_count <= max_nodes - 3) {
-                left_childs[n] = new_node_count;
-                mid_childs[n] = new_node_count + 1;
-                right_childs[n] = new_node_count + 2;
+                childs[n*branches+0] = new_node_count;
+                childs[n*branches+1] = new_node_count + 1;
+                childs[n*branches+2] = new_node_count + 2;
 
-                node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
-                node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
-                node_scores[right_childs[n]] = right_vars[n] / right_counts[n];
+                for (int b = 0; b < branches; b++) {
+                    uint16_t child = childs[n*branches+b];
+                    node_scores[child] = (child_counts[n][b] == 0) ? 0 :
+                        child_vars[n][b] / child_counts[n][b];
 
-                node_counts[left_childs[n]] = left_counts[n];
-                node_counts[mid_childs[n]] = mid_counts[n];
-                node_counts[right_childs[n]] = right_counts[n];
-
-                node_sums[left_childs[n]] = left_sums[n];
-                node_sums[mid_childs[n]] = mid_sums[n];
-                node_sums[right_childs[n]] = right_sums[n];
-
-                node_sum_sqs[left_childs[n]] = left_sum_sqs[n];
-                node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
-                node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
+                    node_counts[child]  = child_counts[n][b];
+                    node_sums[child]    = child_sums[n][b];
+                    node_sum_sqs[child] = child_sum_sqs[n][b];
+                }
 
                 new_node_count += 3;
             } else if (should_split[n]) {
@@ -331,12 +310,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             uint8_t v = X[split_col[n]*rows + r];
 
-            uint16_t child = (
-                v <= split_lo[n] ? left_childs[n] :
-                v <= split_hi[n] ? mid_childs[n] :
-                right_childs[n]);
+            int b = (v <= split_vals[n*branches+0]) ? 0 :
+                    (v <= split_vals[n*branches+1]) ? 1 : 2;
 
-            memberships[r] = child;
+            memberships[r] = childs[n*branches+b];
         }
         done_count = node_count;
         node_count = new_node_count;
@@ -369,11 +346,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
-    Py_DECREF(split_lo_obj);
-    Py_DECREF(split_hi_obj);
-    Py_DECREF(left_childs_obj);
-    Py_DECREF(mid_childs_obj);
-    Py_DECREF(right_childs_obj);
+    Py_DECREF(split_val_obj);
+    Py_DECREF(childs_obj);
     Py_DECREF(node_mean_obj);
     Py_DECREF(preds_obj);
 
@@ -395,8 +369,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
-    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
+    PyObject *split_col_arg, *split_val_arg, *childs_arg, *node_mean_arg;
     PyObject *out_arg;
 
     struct timeval total_start;
@@ -406,44 +379,33 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     gettimeofday(&total_start, NULL);
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &split_col_arg,
-        &PyArray_Type, &split_lo_arg,
-        &PyArray_Type, &split_hi_arg,
-        &PyArray_Type, &left_childs_arg,
-        &PyArray_Type, &mid_childs_arg,
-        &PyArray_Type, &right_childs_arg,
+        &PyArray_Type, &split_val_arg,
+        &PyArray_Type, &childs_arg,
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_val_obj = PyArray_FROM_OTF(split_val_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *childs_obj = PyArray_FROM_OTF(childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
     PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
         split_col_obj == NULL ||
-        split_lo_obj == NULL ||
-        split_hi_obj == NULL ||
-        left_childs_obj == NULL ||
-        mid_childs_obj == NULL ||
-        right_childs_obj == NULL ||
+        split_val_obj == NULL ||
+        childs_obj == NULL ||
         node_mean_obj == NULL ||
         out_obj == NULL)
     {
         Py_XDECREF(X_obj);
         Py_XDECREF(split_col_obj);
-        Py_XDECREF(split_lo_obj);
-        Py_XDECREF(split_hi_obj);
-        Py_XDECREF(left_childs_obj);
-        Py_XDECREF(mid_childs_obj);
-        Py_XDECREF(right_childs_obj);
+        Py_XDECREF(split_val_obj);
+        Py_XDECREF(childs_obj);
         Py_XDECREF(node_mean_obj);
         Py_XDECREF(out_obj);
         return NULL;
@@ -452,28 +414,27 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     // this assumes the arrays are C-order, aligned, non-strided
     float *    restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
     uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    float *    restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    float *    restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
-    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
-    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
-    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    float *    restrict split_vals   = PyArray_DATA((PyArrayObject *) split_val_obj);
+    uint16_t * restrict childs       = PyArray_DATA((PyArrayObject *) childs_obj);
     double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
 
 
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
-        uint16_t left;
-        while ((left = left_childs[n])) {
+        int b;
+        while (childs[n*branches]) {
             float val = X[r*cols + split_col[n]];
-            n = (val <= split_lo[n]) ? left :
-                (val <= split_hi[n]) ? mid_childs[n] :
-                right_childs[n];
+            b = (val <= split_vals[n*branches+0]) ? 0 :
+                (val <= split_vals[n*branches+1]) ? 1 : 2;
+
+            n = childs[n*branches+b];
         }
         out[r] = node_means[n];
 
@@ -482,11 +443,8 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 
     Py_DECREF(X_obj);
     Py_DECREF(split_col_obj);
-    Py_DECREF(split_lo_obj);
-    Py_DECREF(split_hi_obj);
-    Py_DECREF(left_childs_obj);
-    Py_DECREF(mid_childs_obj);
-    Py_DECREF(right_childs_obj);
+    Py_DECREF(split_val_obj);
+    Py_DECREF(childs_obj);
     Py_DECREF(node_mean_obj);
     Py_DECREF(out_obj);
 
