@@ -108,6 +108,8 @@ def test_fit_tree():
     [0, 0, 0],
     [0, 0, 0],
     [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
   ])
   assert_array_equal(tree.split_cols, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   assert_array_almost_equal(tree.split_vals, [
@@ -158,20 +160,20 @@ def test_eval_tree():
     node_means = np.array([0, 1, 0, 9, 3, 0, 2], dtype=np.double),
   )
 
-  # X = np.array([
-  #   [10, 10],
-  #   [11, 10],
-  #   [10, 1],
-  #   [10, 101],
-  # ], dtype=np.float32)
-  # assert_array_almost_equal(
-  #   eval_tree(tree, X),
-  #   np.array([
-  #     3,
-  #     2,
-  #     1,
-  #     9
-  #   ]))
+  X = np.array([
+    [10, 10],
+    [11, 10],
+    [10, 1],
+    [10, 101],
+  ], dtype=np.float32)
+  assert_array_almost_equal(
+    eval_tree(tree, X),
+    np.array([
+      3,
+      2,
+      1,
+      9
+    ]))
 
 
 

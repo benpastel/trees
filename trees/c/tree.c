@@ -102,9 +102,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) childs_obj, 0);
     const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
+    const int splits = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
     const uint64_t vals = 256;
 
-    if (branches != 3) {
+    if (branches != 3 || splits != 2) {
         printf("Can't handle branches != 3 yet.\n");
         return NULL;
     }
@@ -240,8 +241,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             if (score < node_scores[n]) {
                                 node_scores[n] = score;
                                 split_col[n] = c;
-                                split_vals[n*branches+0] = lo;
-                                split_vals[n*branches+1] = hi;
+                                split_vals[n*splits+0] = lo;
+                                split_vals[n*splits+1] = hi;
 
                                 child_counts[n][0] = left_count;
                                 child_counts[n][1] = mid_count;
@@ -310,8 +311,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             uint8_t v = X[split_col[n]*rows + r];
 
-            int b = (v <= split_vals[n*branches+0]) ? 0 :
-                    (v <= split_vals[n*branches+1]) ? 1 : 2;
+            int b = (v <= split_vals[n*splits+0]) ? 0 :
+                    (v <= split_vals[n*splits+1]) ? 1 : 2;
 
             memberships[r] = childs[n*branches+b];
         }
@@ -422,19 +423,24 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
-
+    const int splits = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
+    if (branches != splits + 1) {
+        printf("bad split count\n");
+        return NULL;
+    }
 
     gettimeofday(&loop_start, NULL);
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
         int b;
         while (childs[n*branches]) {
             float val = X[r*cols + split_col[n]];
-            b = (val <= split_vals[n*branches+0]) ? 0 :
-                (val <= split_vals[n*branches+1]) ? 1 : 2;
+            b = (val <= split_vals[n*splits+0]) ? 0 :
+                (val <= split_vals[n*splits+1]) ? 1 : 2;
 
             n = childs[n*branches+b];
+
         }
         out[r] = node_means[n];
 

@@ -30,7 +30,7 @@ def fit_tree(
   assert 0 <= params.smooth_factor
 
   # check if depth constraint imposes a tighter max_nodes
-  max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
+  max_nodes_from_depth = np.sum(params.branch_count**np.arange(params.max_depth))
   max_nodes = min(params.max_nodes, max_nodes_from_depth)
   assert 0 < max_nodes < 2**16
 
