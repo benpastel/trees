@@ -436,8 +436,9 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         int b;
         while (childs[n*branches]) {
             float val = X[r*cols + split_col[n]];
-            b = (val <= split_vals[n*splits+0]) ? 0 :
-                (val <= split_vals[n*splits+1]) ? 1 : 2;
+
+            b = 0;
+            while (b < splits && val > split_vals[n*splits+b]) b++;
 
             n = childs[n*branches+b];
 
