@@ -249,14 +249,17 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             split_counts[3] = total_count - split_counts[0] - split_counts[1] - split_counts[2];
                             split_sums[3] = total_sum - split_sums[0] - split_sums[1] - split_sums[2];
                             split_sum_sqs[3] = total_sum_sqs - split_sum_sqs[0] - split_sum_sqs[1] - split_sum_sqs[2];
-                            split_vars[3] = (split_counts[3] == 0) ? 0 : split_sum_sqs[3] - split_sums[3] * split_sums[3] / split_counts[3];
+
+                            if (split_counts[3] == 0) break; // non-empty rightmost split
+
+                            split_vars[3] = split_sum_sqs[3] - split_sums[3] * split_sums[3] / split_counts[3];
 
                             double score = (split_vars[0] + split_vars[1] + split_vars[2] + split_vars[3] + penalty) / total_count;
                             if (score < node_scores[n]) {
                                 omp_set_lock(&node_locks[n]);
                                 if (score < node_scores[n]) {
-                                    printf("score: %.4f -> %.4f, n=%d, c=%llu, s1=%d, s2=%d, s3=%d\n", node_scores[n], score, n, c,
-                                        s1, s2, s3);
+                                    // printf("score: %.4f -> %.4f, n=%d, c=%llu, s1=%d, s2=%d, s3=%d\n", node_scores[n], score, n, c,
+                                    //     s1, s2, s3);
 
                                     node_scores[n] = score;
                                     split_col[n] = c;
@@ -264,20 +267,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                     if (split_count >= 2) split_vals[n*split_count+1] = s2;
                                     if (split_count >= 3) split_vals[n*split_count+2] = s3;
 
-                                    for (int s = 0; s < branches; s++) {
-                                        printf("    s=%d: counts %llu , sums %.4f, sum_sqs %.4f, vars %.4f\n",
-                                            s,
-                                            split_counts[s],
-                                            split_sums[s],
-                                            split_sum_sqs[s],
-                                            split_vars[s]);
+                                    for (int s = 0; s < split_count; s++) {
+                                        // printf("    s=%d: counts %llu , sums %.4f, sum_sqs %.4f, vars %.4f\n",
+                                        //     s,
+                                        //     split_counts[s],
+                                        //     split_sums[s],
+                                        //     split_sum_sqs[s],
+                                        //     split_vars[s]);
 
                                         child_counts[n][s] = split_counts[s];
                                         child_sums[n][s] = split_sums[s];
                                         child_sum_sqs[n][s] = split_sum_sqs[s];
                                         child_vars[n][s] = split_vars[s];
-                                        should_split[n] = true;
+
                                     }
+                                    child_counts[n][split_count] = split_counts[3];
+                                    child_sums[n][split_count] = split_sums[3];
+                                    child_sum_sqs[n][split_count] = split_sum_sqs[3];
+                                    child_vars[n][split_count] = split_vars[3];
+
+                                    should_split[n] = true;
                                 }
                                 omp_unset_lock(&node_locks[n]);
                             }
