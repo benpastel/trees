@@ -123,8 +123,13 @@ def fit(
     target = params.learning_rate * (y - preds)
 
     tree, new_preds = fit_tree(XT, target, bins, params)
-    trees.append(tree)
 
+    if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
+      # 2 trees with 1 node in a row
+      # don't add the 2nd one, and stop early
+      return Model(trees, targets_are_float, mean_y), preds
+
+    trees.append(tree)
     preds += new_preds
 
   return Model(trees, targets_are_float, mean_y), preds
