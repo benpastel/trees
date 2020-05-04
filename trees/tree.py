@@ -26,7 +26,7 @@ def fit_tree(
   assert y.shape == (rows,)
   assert bins.shape == (feats, 255)
   assert bins.dtype == np.float32
-  assert 2 <= params.branch_count <= 8
+  assert 2 <= params.branch_count <= 4
   assert 0 <= params.smooth_factor
 
   # check if depth constraint imposes a tighter max_nodes

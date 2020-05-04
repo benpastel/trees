@@ -102,13 +102,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) childs_obj, 0);
     const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
-    const int splits = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
+    const int split_count = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
     const uint64_t vals = 256;
-
-    if (branches != 3 || splits != 2) {
-        printf("Can't handle branches != 3 yet.\n");
-        return NULL;
-    }
 
     uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
 
@@ -186,86 +181,115 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // min leaf size is 1 for left & right, 0 for mid
                 if (node_counts[n] < 2) continue;
 
-                // running sums from the left side
-                uint64_t left_count = 0;
-                double left_sum = 0.0;
-                double left_sum_sq = 0.0;
+                // evaluate all possible combinations of splitting points
+                // TODO optimize
+                uint64_t split_counts [branches];
+                double split_sums [branches];
+                double split_sum_sqs [branches];
+                double split_vars [branches];
 
-                // evaluate each possible splitting point
-                for (uint64_t lo = 0; lo < vals - 2; lo++) {
-                    uint64_t lo_i = n*vals + lo;
+                double total_count = node_counts[n];
+                double total_sum = 0;
+                double total_sum_sqs = 0.0;
+                for (int v = 0; v < (int) vals; v++) {
+                    total_sum += sums[n*vals + v];
+                    total_sum_sqs += sum_sqs[n*vals + v];
+                }
 
-                    // force non-empty left split
-                    if (counts[lo_i] == 0) continue;
+                split_counts[0] = 0;
+                split_sums[0] = 0.0;
+                split_sum_sqs[0] = 0.0;
+                split_vars[0] = 0.0;
 
-                    left_count += counts[lo_i];
-                    left_sum += sums[lo_i];
-                    left_sum_sq += sum_sqs[lo_i];
-                    double left_var = left_sum_sq - (left_sum * left_sum / left_count);
+                for (uint8_t s1 = 0; s1 < vals-1; s1++) {
+                    int i1 = n*vals + s1;
+                    if (counts[i1] == 0) continue; // don't allow empty left split
 
-                    uint64_t mid_count = 0;
-                    double mid_sum = 0.0;
-                    double mid_sum_sq = 0.0;
+                    split_counts[0] += counts[i1];
+                    split_sums[0] += sums[i1];
+                    split_sum_sqs[0] += sum_sqs[i1];
+                    split_vars[0] = split_sum_sqs[0] - split_sums[0] * split_sums[0] / split_counts[0];
 
-                    // allow mid split to be empty
-                    // so start at hi = lo and allow mid_count = 0
-                    for (uint64_t hi = lo; hi < vals - 1; hi++) {
-                        uint64_t hi_i = n*vals + hi;
+                    split_counts[1] = 0;
+                    split_sums[1] = 0.0;
+                    split_sum_sqs[1] = 0;
+                    split_vars[1] = 0.0;
 
-                        if (hi > lo) {
-                            mid_count += counts[hi_i];
-                            mid_sum += sums[hi_i];
-                            mid_sum_sq += sum_sqs[hi_i];
+                    for (uint8_t s2 = s1; s2 < vals-1; s2++) {
+                        int i2 = n*vals + s2;
+                        // allow this split empty when s2 == s1
+
+                        if (s2 > s1 && counts[i2]) {
+                            split_counts[1] += counts[i2];
+                            split_sums[1] += sums[i2];
+                            split_sum_sqs[1] += sum_sqs[i2];
+                            split_vars[1] = split_sum_sqs[1] - split_sums[1] * split_sums[1] / split_counts[1];
+                        } else if (s2 > s1) {
+                            continue;
                         }
 
-                        uint64_t right_count = node_counts[n] - left_count - mid_count;
-                        double right_sum = node_sums[n] - left_sum - mid_sum;
-                        double right_sum_sq = node_sum_sqs[n] - left_sum_sq - mid_sum_sq;
+                        split_counts[2] = 0;
+                        split_sums[2] = 0.0;
+                        split_sum_sqs[2] = 0.0;
+                        split_vars[2] = 0.0;
 
-                        // force non-empty right split
-                        if (right_count == 0) break;
+                        for (uint8_t s3 = s2; s3 < vals-1; s3++) {
+                            int i3 = n*vals + s3;
+                            // allow this split empty when s3 == s2
 
-                        // weighted average of splits' variance
-                        // TODO maybe now we can encourage empty splits by penalty * nonempties?
-                        // TODO try k splits for different k?
-                        double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
-                        double right_var = right_sum_sq - (right_sum * right_sum / right_count);
-                        double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
-
-                        // node_scores[n] may be stale, but it only decreases
-                        // first check without the lock for efficiency
-                        if (score < node_scores[n]) {
-                            // now check with the lock for correctness
-                            omp_set_lock(&node_locks[n]);
-                            if (score < node_scores[n]) {
-                                node_scores[n] = score;
-                                split_col[n] = c;
-                                split_vals[n*splits+0] = lo;
-                                split_vals[n*splits+1] = hi;
-
-                                child_counts[n][0] = left_count;
-                                child_counts[n][1] = mid_count;
-                                child_counts[n][2] = right_count;
-
-                                child_sums[n][0] = left_sum;
-                                child_sums[n][1] = mid_sum;
-                                child_sums[n][2] = right_sum;
-
-                                child_sum_sqs[n][0] = left_sum_sq;
-                                child_sum_sqs[n][1] = mid_sum_sq;
-                                child_sum_sqs[n][2] = right_sum_sq;
-
-                                child_vars[n][0] = left_var;
-                                child_vars[n][1] = mid_var;
-                                child_vars[n][2] = right_var;
-
-                                should_split[n] = true;
+                            if (s3 > s2 && counts[i3]) {
+                                split_counts[2] += counts[i3];
+                                split_sums[2] += sums[i3];
+                                split_sum_sqs[2] += sum_sqs[i3];
+                                split_vars[2] = split_sum_sqs[2] - split_sums[2] * split_sums[2] / split_counts[2];
+                            } else if (s3 > s2) {
+                                continue;
                             }
-                            omp_unset_lock(&node_locks[n]);
+
+                            split_counts[3] = total_count - split_counts[0] - split_counts[1] - split_counts[2];
+                            split_sums[3] = total_sum - split_sums[0] - split_sums[1] - split_sums[2];
+                            split_sum_sqs[3] = total_sum_sqs - split_sum_sqs[0] - split_sum_sqs[1] - split_sum_sqs[2];
+                            split_vars[3] = (split_counts[3] == 0) ? 0 : split_sum_sqs[3] - split_sums[3] * split_sums[3] / split_counts[3];
+
+                            double score = (split_vars[0] + split_vars[1] + split_vars[2] + split_vars[3] + penalty) / total_count;
+                            if (score < node_scores[n]) {
+                                omp_set_lock(&node_locks[n]);
+                                if (score < node_scores[n]) {
+                                    printf("score: %.4f -> %.4f, n=%d, c=%llu, s1=%d, s2=%d, s3=%d\n", node_scores[n], score, n, c,
+                                        s1, s2, s3);
+
+                                    node_scores[n] = score;
+                                    split_col[n] = c;
+                                    split_vals[n*split_count+0] = s1;
+                                    if (split_count >= 2) split_vals[n*split_count+1] = s2;
+                                    if (split_count >= 3) split_vals[n*split_count+2] = s3;
+
+                                    for (int s = 0; s < branches; s++) {
+                                        printf("    s=%d: counts %llu , sums %.4f, sum_sqs %.4f, vars %.4f\n",
+                                            s,
+                                            split_counts[s],
+                                            split_sums[s],
+                                            split_sum_sqs[s],
+                                            split_vars[s]);
+
+                                        child_counts[n][s] = split_counts[s];
+                                        child_sums[n][s] = split_sums[s];
+                                        child_sum_sqs[n][s] = split_sum_sqs[s];
+                                        child_vars[n][s] = split_vars[s];
+                                        should_split[n] = true;
+                                    }
+                                }
+                                omp_unset_lock(&node_locks[n]);
+                            }
+
+                            // if split_count < 3, ONLY consider s3 == s2 case
+                            if (split_count < 3) break;
                         }
-                        // if (hi < 5)
-                        //     printf("    %llu split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", c, lo, hi, left_var, mid_var, right_var, score);
+
+                        // if split_count < 2, ONLY consider s2 == s1 case
+                        if (split_count < 2) break;
                     }
+
                 }
             }
             free(counts);
@@ -310,7 +334,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             uint8_t v = X[split_col[n]*rows + r];
 
             int b = 0;
-            while (b < splits && v > split_vals[n*splits+b]) b++;
+            while (b < split_count && v > split_vals[n*split_count+b]) b++;
 
             memberships[r] = childs[n*branches+b];
         }
@@ -421,8 +445,8 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const int branches = PyArray_DIM((PyArrayObject *) childs_obj, 1);
-    const int splits = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
-    if (branches != splits + 1) {
+    const int split_count = PyArray_DIM((PyArrayObject *) split_val_obj, 1);
+    if (branches != split_count + 1) {
         printf("bad split count\n");
         return NULL;
     }
@@ -436,7 +460,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
             float val = X[r*cols + split_col[n]];
 
             b = 0;
-            while (b < splits && val > split_vals[n*splits+b]) b++;
+            while (b < split_count && val > split_vals[n*split_count+b]) b++;
 
             n = childs[n*branches+b];
 
