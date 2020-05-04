@@ -336,17 +336,19 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    with timed(f'train our tree with {tree_params}...'):
-      # with profiled():
-      model, _ = fit(train_X, train_y, tree_params)
-    print(model.__str__(verbose=False))
+    for b in [2, 3, 4]:
+      tree_params = Params(tree_count=tree_count, branch_count=b)
+      with timed(f'train our tree with {tree_params}...'):
+        # with profiled():
+        model, _ = fit(train_X, train_y, tree_params)
+      print(model.__str__(verbose=False))
 
-    with timed(f'predict our tree...'):
-      # with profiled():
-      train_preds = predict(model, train_X)
-      valid_preds = predict(model, valid_X)
-    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    del model
-    del train_preds
-    del valid_preds
-    gc.collect()
+      with timed(f'predict our tree...'):
+        # with profiled():
+        train_preds = predict(model, train_X)
+        valid_preds = predict(model, valid_X)
+      print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+      del model
+      del train_preds
+      del valid_preds
+      gc.collect()

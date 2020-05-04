@@ -6,6 +6,51 @@ from numpy.testing import assert_array_equal, assert_array_almost_equal
 from trees.tree import fit_tree, eval_tree, Tree
 from trees.params import Params
 
+def test_branch_counts_fit():
+  pp = pprint.PrettyPrinter(indent=4)
+
+  #             (9)
+  #           /    \
+  #         /        \
+  #       /            \
+  # [0,2,2,3,9,7]  [100,100,100]
+  #
+  X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
+  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  bins = np.arange(255, dtype=np.float32).reshape((1, -1))
+  tree, preds = fit_tree(
+    X.T,
+    y,
+    bins,
+    Params(smooth_factor=1.0, branch_count=2)
+  )
+  pp.pprint(tree.__dict__)
+  assert tree.node_count == 3
+  assert_array_equal(tree.children, [[1,2], [0,0], [0,0]])
+  assert_array_equal(tree.split_cols, [0, 0, 0])
+  assert_array_almost_equal(tree.split_vals, [[9], [0], [0]])
+  assert_array_almost_equal(tree.node_means, [np.mean(y), 23/6, 100])
+  assert_array_almost_equal(preds, [23/6, 23/6, 23/6, 23/6, 23/6, 100, 23/6, 100, 100])
+
+  # [0], [2,2,3], [9,7]  [100,100,100]
+  #
+  X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
+  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  bins = np.arange(255, dtype=np.float32).reshape((1, -1))
+  tree, preds = fit_tree(
+    X.T,
+    y,
+    bins,
+    Params(smooth_factor=1.0, branch_count=4)
+  )
+  pp.pprint(tree.__dict__)
+  assert tree.node_count == 5
+  assert_array_equal(tree.children, [[1,2,3,4], [0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]])
+  assert_array_equal(tree.split_cols, [0, 0, 0, 0, 0])
+  assert_array_almost_equal(tree.split_vals, [[0,3,9], [0,0,0], [0,0,0], [0,0,0], [0,0,0]])
+  assert_array_almost_equal(tree.node_means, [np.mean(y), 0, 7/3, 8, 100])
+  assert_array_almost_equal(preds, [8, 7/3, 8, 0, 7/3, 100, 7/3, 100, 100])
+
 
 def test_fit_tree():
   pp = pprint.PrettyPrinter(indent=4)
@@ -36,7 +81,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0)
+    Params(smooth_factor=1.0, branch_count=3)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -70,7 +115,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0)
+    Params(smooth_factor=1.0, branch_count=3)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -95,7 +140,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=0.0)
+    Params(smooth_factor=0.0, branch_count=3)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 10

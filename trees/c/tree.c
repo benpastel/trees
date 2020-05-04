@@ -183,10 +183,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // evaluate all possible combinations of splitting points
                 // TODO optimize
-                uint64_t split_counts [branches];
-                double split_sums [branches];
-                double split_sum_sqs [branches];
-                double split_vars [branches];
+                uint64_t split_counts [5];
+                double split_sums [5];
+                double split_sum_sqs [5];
+                double split_vars [5];
 
                 double total_count = node_counts[n];
                 double total_sum = 0;
