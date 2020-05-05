@@ -254,7 +254,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                             split_vars[3] = split_sum_sqs[3] - split_sums[3] * split_sums[3] / split_counts[3];
 
-                            double score = (split_vars[0] + split_vars[1] + split_vars[2] + split_vars[3] + penalty) / total_count;
+                            double split_penalty = penalty;
+                            if (split_counts[1] > 0) split_penalty += 10.0 * penalty;
+                            if (split_counts[2] > 0) split_penalty += 10.0 * penalty;
+
+                            double score = (split_vars[0] + split_vars[1] + split_vars[2] + split_vars[3] + split_penalty) / total_count;
                             if (score < node_scores[n]) {
                                 omp_set_lock(&node_locks[n]);
                                 if (score < node_scores[n]) {
