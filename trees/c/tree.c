@@ -102,23 +102,23 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
-    double *   restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
-    uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    uint8_t *  restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    uint8_t *  restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
-    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
-    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
-    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
-    double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
-    double *   restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
+    uint8_t *  __restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    double *   __restrict y            = PyArray_DATA((PyArrayObject *) y_obj);
+    uint64_t * __restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
+    uint8_t *  __restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    uint8_t *  __restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    uint16_t * __restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
+    uint16_t * __restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
+    uint16_t * __restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   __restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
     const uint64_t vals = 256;
 
-    uint16_t * restrict memberships = calloc(rows, sizeof(uint16_t));
+    uint16_t * __restrict memberships = calloc(rows, sizeof(uint16_t));
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
@@ -182,9 +182,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
-            uint64_t * restrict counts = calloc(node_count * vals, sizeof(uint64_t));
-            double * restrict sums = calloc(node_count * vals, sizeof(double));
-            double * restrict sum_sqs = calloc(node_count * vals, sizeof(double));
+            uint64_t * __restrict counts = calloc(node_count * vals, sizeof(uint64_t));
+            double * __restrict sums = calloc(node_count * vals, sizeof(double));
+            double * __restrict sum_sqs = calloc(node_count * vals, sizeof(double));
 
             // stats
             for (uint64_t r = 0; r < rows; r++) {
@@ -278,8 +278,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             }
                             omp_unset_lock(&node_locks[n]);
                         }
-                        // if (hi < 5)
-                        //     printf("    %llu split=(%llu,%llu) var=(%f,%f,%f) score=%f\n", c, lo, hi, left_var, mid_var, right_var, score);
                     }
                 }
             }
@@ -450,15 +448,15 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     }
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    float *    restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    float *    restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    float *    restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
-    uint16_t * restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
-    uint16_t * restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
-    uint16_t * restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
-    double *   restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
-    double *   restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
+    float *    __restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * __restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
+    float *    __restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    float *    __restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    uint16_t * __restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
+    uint16_t * __restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
+    uint16_t * __restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   __restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
@@ -527,9 +525,9 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
         Py_XDECREF(out_obj);
         return NULL;
     }
-    float *   restrict X    = PyArray_DATA((PyArrayObject *) X_obj);
-    float *   restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
-    uint8_t * restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
+    float *   __restrict X    = PyArray_DATA((PyArrayObject *) X_obj);
+    float *   __restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
+    uint8_t * __restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
