@@ -257,7 +257,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         // weighted average of splits' variance
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
-                        double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
+                        double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
 
                         // node_scores[n] may be stale, but it only decreases
                         // first check without the lock for efficiency

@@ -36,7 +36,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0)
+    Params(smooth_factor=1.0, third_split_penalty=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -49,7 +49,6 @@ def test_fit_tree():
   assert_array_almost_equal(tree.node_means,    [ 1, 1, 2, 0])
   assert_array_almost_equal(preds, [2, 1, 0, 2, 1, 0])
 
-  # from here on use 1 column X, X = y, for simplicity
   #            (3,9)
   #           /  |  \
   #         /    |    \
@@ -63,7 +62,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0)
+    Params(smooth_factor=1.0, third_split_penalty=0.01)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -75,6 +74,34 @@ def test_fit_tree():
   assert_array_almost_equal(tree.split_hi_vals,  [9, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [np.mean(y), 7/4, 8, 100])
   assert_array_almost_equal(preds, [8, 7/4, 8, 7/4, 7/4, 100, 7/4, 100, 100])
+
+  #             (9,9)
+  #           /   |  \
+  #         /     |    \
+  #       /       |      \
+  # [0,2,2,3,9,7] []  [100,100,100]
+  #
+  X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
+  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  bins = np.arange(255, dtype=np.float32).reshape((1, -1))
+  tree, preds = fit_tree(
+    X.T,
+    y,
+    bins,
+    Params(smooth_factor=1.0, third_split_penalty=10.0)
+  )
+  pp.pprint(tree.__dict__)
+  assert tree.node_count == 4
+  assert_array_equal(tree.left_children,         [1, 0, 0, 0])
+  assert_array_equal(tree.mid_children,          [2, 0, 0, 0])
+  assert_array_equal(tree.right_children,        [3, 0, 0, 0])
+  assert_array_equal(tree.split_cols,            [0, 0, 0, 0])
+  assert_array_almost_equal(tree.split_lo_vals,  [9, 0, 0, 0])
+  assert_array_almost_equal(tree.split_hi_vals,  [9, 0, 0, 0])
+  assert_array_almost_equal(tree.node_means, [np.mean(y), 23/6, 0, 100])
+  assert_array_almost_equal(preds, [23/6, 23/6, 23/6, 23/6, 23/6, 100, 23/6, 100, 100])
+
+
 
   #             (3, 9)
   #          /    |    \
