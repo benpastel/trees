@@ -35,6 +35,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *preds_arg;
     double smooth_factor_arg;
     int max_depth_arg;
+    double third_split_penalty_arg;
 
     struct timeval total_start;
     struct timeval init_end;
@@ -49,7 +50,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!di",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!did",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
@@ -61,9 +62,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &preds_arg,
         &smooth_factor_arg,
-        &max_depth_arg)) return NULL;
+        &max_depth_arg,
+        &third_split_penalty_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
     const int max_depth = max_depth_arg;
+    const double third_split_penalty = third_split_penalty_arg;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -222,15 +225,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double mid_sum = 0.0;
                     double mid_sum_sq = 0.0;
 
-                    // allow mid split to be empty
-                    // so start at hi = lo and allow mid_count = 0
+                    // allow mid split to be empty in the hi == lo case ONLY
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
                         uint64_t hi_i = n*vals + hi;
 
-                        if (hi > lo) {
+                        double split_penalty;
+
+                        if (hi > lo && !counts[hi_i]) {
+                            // this value doesn't change the split stats
+                            continue;
+                        } else if (hi > lo) {
+                            // middle split is nonempty
+                            // penalize it by a factor
+                            split_penalty = penalty + third_split_penalty * penalty;
+
                             mid_count += counts[hi_i];
                             mid_sum += sums[hi_i];
                             mid_sum_sq += sum_sqs[hi_i];
+                        } else {
+                            // middle split is empty
+                            split_penalty = penalty;
                         }
 
                         uint64_t right_count = node_counts[n] - left_count - mid_count;
@@ -241,8 +255,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         if (right_count == 0) break;
 
                         // weighted average of splits' variance
-                        // TODO maybe now we can encourage empty splits by penalty * nonempties?
-                        // TODO try k splits for different k?
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + penalty) / node_counts[n];
