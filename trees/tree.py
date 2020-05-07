@@ -27,10 +27,11 @@ def fit_tree(
   assert XT.dtype == np.uint8
   assert y.dtype == np.double
   assert y.shape == (rows,)
-  assert bins.shape == (feats, 255)
+  assert bins.shape == (feats, params.bucket_count-1)
   assert bins.dtype == np.float32
   assert 0 <= params.smooth_factor
   assert 0 <= params.third_split_penalty
+  assert 2 <= params.bucket_count <= 256
 
   # check if depth constraint imposes a tighter max_nodes
   max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
@@ -61,7 +62,8 @@ def fit_tree(
     preds,
     params.smooth_factor,
     params.max_depth,
-    params.third_split_penalty)
+    params.third_split_penalty,
+    params.bucket_count)
 
   # convert the splits from binned uint8 values => original float32 values
   split_lo_vals = np.zeros(node_count, dtype=np.float32)

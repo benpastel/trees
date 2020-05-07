@@ -27,11 +27,10 @@ class Model:
     return s
 
 
-BUCKET_COUNT = 256 # uint8 buckets
-SAMPLE_COUNT = 256000
 def choose_bins(
     X: np.ndarray,
-    bucket_count=BUCKET_COUNT
+    bucket_count: int,
+    sample_count: int
 ) -> np.ndarray:
   # bins for each column
   # where bins is an array of right inclusive endpoints:
@@ -43,8 +42,8 @@ def choose_bins(
   #
   rows, cols = X.shape
 
-  if rows > SAMPLE_COUNT:
-    sample = np.random.randint(rows, size=SAMPLE_COUNT, dtype=np.intp)
+  if rows > sample_count:
+    sample = np.random.randint(rows, size=sample_count, dtype=np.intp)
     X = X[sample, :]
 
   bins = np.zeros((cols, bucket_count-1), dtype=X.dtype)
@@ -83,20 +82,24 @@ def choose_bins(
 
 
 def apply_bins(
-  X: np.ndarray,
+  XT: np.ndarray,
   bins: np.ndarray
 ) -> np.ndarray:
   ''' returns X bucketed into the splits '''
-  rows, cols = X.shape
-  assert bins.shape == (cols, BUCKET_COUNT-1)
-  assert X.dtype == np.float32
+  cols, rows = XT.shape
+  splits = bins.shape[1]
+  assert bins.ndim == 2
+  assert bins.shape[0] == cols
+  assert XT.dtype == np.float32
   assert bins.dtype == np.float32
 
-  binned_X = np.zeros((cols, rows), dtype=np.uint8)
+  binned_XT = np.zeros((cols, rows), dtype=np.uint8)
 
-  c_apply_bins(X, bins, binned_X)
+  c_apply_bins(XT, bins, binned_XT)
 
-  return binned_X
+  assert np.all(binned_XT < splits+1)
+
+  return binned_XT
 
 
 def fit(
@@ -106,23 +109,29 @@ def fit(
 ) -> Model:
   rows, feats = X.shape
   assert y.shape == (rows,)
+  assert 2 <= params.bucket_count <= 256
+  assert 0 < params.bucket_sample_count
+  assert 0 < params.trees_per_bucketing
   targets_are_float = (y.dtype != np.bool)
 
-  # TODO support multiple dtypes to avoid copy
   X = X.astype(np.float32, copy=False)
+  XT = X.T.copy()
   y = y.astype(np.double, copy=False)
   mean_y = np.mean(y)
   preds = np.full(rows, mean_y, dtype=np.double)
 
-  bins = choose_bins(X)
-  XT = apply_bins(X, bins)
-  assert XT.dtype == np.uint8
+  bins = None
+  bin_XT = None
 
   trees = []
   for t in range(params.tree_count):
+    if (t % params.trees_per_bucketing) == 0:
+      bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
+      bin_XT = apply_bins(XT, bins)
+
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(XT, target, bins, params)
+    tree, new_preds = fit_tree(bin_XT, target, bins, params)
 
     if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
       # 2 trees with 1 node in a row

@@ -36,6 +36,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double smooth_factor_arg;
     int max_depth_arg;
     double third_split_penalty_arg;
+    int vals_arg;
 
     struct timeval total_start;
     struct timeval init_end;
@@ -50,7 +51,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!did",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!didi",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
@@ -63,10 +64,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &preds_arg,
         &smooth_factor_arg,
         &max_depth_arg,
-        &third_split_penalty_arg)) return NULL;
+        &third_split_penalty_arg,
+        &vals_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
     const int max_depth = max_depth_arg;
     const double third_split_penalty = third_split_penalty_arg;
+    const uint vals = vals_arg;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -119,7 +122,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
-    const uint64_t vals = 256;
 
     uint16_t * __restrict memberships = calloc(rows, sizeof(uint16_t));
 
@@ -541,32 +543,30 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     float *   __restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
     uint8_t * __restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
 
-    const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint64_t seps = 255;
-    const uint8_t max_val = 255;
+    const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint8_t splits = PyArray_DIM((PyArrayObject *) bins_obj, 1);
+    const int vals = splits + 1; // may be 256, overflowing uint8_t
 
-    // bins is a (cols, 255) array separating X into 256 values
+    if (vals > 256) {
+        printf("Bad vals: %d\n", vals);
+        return NULL;
+    }
+
+    // bins is a (cols, splits) array separating X into splits+1 values
     // for binning the data in X from float => uint8
     //
     // such that (floats in bucket 0) <= bins[c, 0] < (floats in bucket 1) <= bins[c, 1] ...
     //
-    // instead of searching for the first bin that a value falls into
-    // we count 255 - (the number of seps the is less than);
-    // this is easier to vectorize
-    //
-    // we also transpose (rows, cols) => (cols, rows) when we write to out
-    //
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
-    for (uint64_t r = 0; r < rows; r++) {
-        for (uint64_t c = 0; c < cols; c++) {
-            float val = X[r*cols + c];
-            uint8_t sum = 0; // simple accumulator so clang can vectorize
-            for (uint64_t v = 0; v < seps; v++) {
-                sum += (val <= bins[c*seps + v]);
-            }
-            out[c*rows + r] = max_val - sum;
+    for (uint64_t c = 0; c < cols; c++) {
+        for (uint64_t r = 0; r < rows; r++) {
+            uint64_t idx = c*rows + r;
+            float val = X[idx];
+            int b = 0;
+            while (b < vals-1 && val > bins[c*splits + b]) b++;
+            out[idx] = b;
         }
     }
     gettimeofday(&loop_stop, NULL);
