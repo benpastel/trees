@@ -51,6 +51,6 @@ def regression_stats(preds: np.ndarray, trues: np.ndarray) -> str:
   mse = np.mean((preds - trues)  * (preds - trues))
   mae = np.mean(np.abs(preds - trues))
   if mse > 1000000:
-    return f'log(MSE): {np.log(mse):.1f}, MAE: {mae:.1f}'
+    return f'log(MSE): {np.log(mse):.2f}, MAE: {mae:.2f}'
   else:
-    return f'MSE: {mse:.1f}, MAE: {mae:.1f}'
+    return f'MSE: {mse:.2f}, MAE: {mae:.2f}'

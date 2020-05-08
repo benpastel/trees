@@ -16,7 +16,6 @@ def print_stats(
     is_regression):
   if is_regression:
     print(f'''
-      train preds: min={np.min(train_preds):.1f}, max={np.max(train_preds):.1f}, mean={np.mean(train_preds):.1f}
       train: {regression_stats(train_preds, train_y)}
       valid: {regression_stats(valid_preds, valid_y)}
     ''')
@@ -291,10 +290,10 @@ if __name__ == '__main__':
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    'Agaricus':            (load_agaricus, Params(tree_count=tree_count)),
-    'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
-    'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
-    'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
+    # 'Agaricus':            (load_agaricus, Params(tree_count=tree_count)),
+    # 'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
+    # 'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
+    # 'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
     'M5':                  (load_m5,           Params(tree_count=tree_count)),
     'Grupo':               (load_grupo,        Params(tree_count=tree_count))
   }
@@ -336,21 +335,17 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    for bucket_count in [2, 4, 8, 16, 32, 64, 128, 256]:
-      print(f'\nBUCKET_COUNT={bucket_count}')
-      tree_params = Params(tree_count=tree_count, bucket_count=bucket_count)
+    with timed(f'train our tree with {tree_params}...'):
+      # with profiled():
+      model, _ = fit(train_X, train_y, tree_params)
+    print(model.__str__(verbose=False))
 
-      with timed(f'train our tree with {tree_params}...'):
-        # with profiled():
-        model, _ = fit(train_X, train_y, tree_params)
-      print(model.__str__(verbose=False))
-
-      with timed(f'predict our tree...'):
-        # with profiled():
-        train_preds = predict(model, train_X)
-        valid_preds = predict(model, valid_X)
-      print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-      del model
-      del train_preds
-      del valid_preds
-      gc.collect()
+    with timed(f'predict our tree...'):
+      # with profiled():
+      train_preds = predict(model, train_X)
+      valid_preds = predict(model, valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()

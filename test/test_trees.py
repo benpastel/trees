@@ -36,7 +36,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=0.0)
+    Params(smooth_factor=1.0, third_split_penalty=0.0, bucket_count=256)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -62,7 +62,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=0.01)
+    Params(smooth_factor=1.0, third_split_penalty=0.01, bucket_count=256)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -88,7 +88,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=10.0)
+    Params(smooth_factor=1.0, third_split_penalty=10.0, bucket_count=256)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -118,7 +118,7 @@ def test_fit_tree():
     X.T,
     y,
     bins,
-    Params(smooth_factor=0.0)
+    Params(smooth_factor=0.0, bucket_count=256)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 10
