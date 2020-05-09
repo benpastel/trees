@@ -561,12 +561,27 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t c = 0; c < cols; c++) {
+
+        uint8_t b = 0;
+
         for (uint64_t r = 0; r < rows; r++) {
             uint64_t idx = c*rows + r;
             float val = X[idx];
-            int b = 0;
-            while (b < vals-1 && val > bins[c*splits + b]) b++;
+
+            // shortcut the 0 case because it's common (val <= bins[c*splits)
+            // since out was 0-initialized, we can just skip
+            if (val <= bins[c*splits]) continue;
+
+            // start at either the value of the previous iteration, or 1
+            // this is kind of like a single round of binary search
+            // but if there are multiple of the same value in a row, we'll shortcut nicely
+            if (val <= bins[c*splits + b - 1]) b = 1;
+
+            // now linear search
+            while (b < vals - 1 && val > bins[c*splits + b]) b++;
+
             out[idx] = b;
+
         }
     }
     gettimeofday(&loop_stop, NULL);

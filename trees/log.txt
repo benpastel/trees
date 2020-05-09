@@ -1,29 +1,26 @@
-python -m trees.benchmarks
-
-
 TREE_COUNT=10
 
 
 Agaricus:
 
 X.shape: train (5211, 126), valid (1302, 126)
-binary classification with 2500 true and 2711 false
+binary classification with 2522 true and 2689 false
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
 (0.1s)
 predict xgboost...
 (0.0s)
 
-      train preds bincount: [2711 2500]
+      train preds bincount: [2689 2522]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(0.2s)
-Classification model with 10 trees with sizes min=19 max=40 mean=29.2
+(0.1s)
+Classification model with 10 trees with sizes min=19 max=40 mean=28.9
 predict our tree...
 (0.0s)
 
-      train preds bincount: [2711 2500]
+      train preds bincount: [2689 2522]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
@@ -32,71 +29,71 @@ predict our tree...
 House Prices:
 
 X.shape: train (1168, 79), valid (292, 79)
-regression targets with min=34900.0, max=755000.0, mean=181591.2
+regression targets with min=34900.0, max=745000.0, mean=181294.2
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
-(0.1s)
+(0.0s)
 predict xgboost...
 (0.0s)
 
-      train: log(MSE): 19.14, MAE: 10121.02
-      valid: log(MSE): 20.23, MAE: 16917.92
+      train: log(MSE): 19.15, MAE: 10153.49
+      valid: log(MSE): 21.02, MAE: 20766.77
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
 (0.1s)
-Regression model with 10 trees with sizes min=1 max=10 mean=6.1
+Regression model with 10 trees with sizes min=4 max=7 mean=5.8
 predict our tree...
 (0.0s)
 
-      train: log(MSE): 21.00, MAE: 23723.73
-      valid: log(MSE): 20.92, MAE: 25309.57
+      train: log(MSE): 20.93, MAE: 23337.84
+      valid: log(MSE): 21.33, MAE: 25932.57
 
 
 
 Home Credit Default:
 
 X.shape: train (246009, 104), valid (61502, 104)
-binary classification with 19866 true and 226143 false
+binary classification with 19818 true and 226191 false
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
 (1.3s)
 predict xgboost...
 (0.5s)
 
-      train preds bincount: [245970     39]
-      train: accuracy = 91.93%, precision = 69.23%, recall = 0.14%
-      valid: accuracy = 91.94%, precision = 66.67%, recall = 0.12%
+      train preds bincount: [245997     12]
+      train: accuracy = 91.95%, precision = 91.67%, recall = 0.06%
+      valid: accuracy = 91.87%, precision = 100.00%, recall = 0.12%
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(1.8s)
-Classification model with 10 trees with sizes min=7 max=52 mean=27.1
+(1.5s)
+Classification model with 10 trees with sizes min=10 max=49 mean=27.4
 predict our tree...
 (0.1s)
 
       train preds bincount: [246009]
-      train: accuracy = 91.92%, precision = 0.00%, recall = 0.00%
-      valid: accuracy = 91.94%, precision = 0.00%, recall = 0.00%
+      train: accuracy = 91.94%, precision = 0.00%, recall = 0.00%
+      valid: accuracy = 91.86%, precision = 0.00%, recall = 0.00%
 
 
 
 Santander Value:
 
 X.shape: train (3568, 4991), valid (891, 4991)
-regression targets with min=30000.0, max=40000000.0, mean=5872550.3
+regression targets with min=30000.0, max=40000000.0, mean=5940736.5
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
 (2.1s)
 predict xgboost...
 (0.3s)
 
-      train: log(MSE): 31.14, MAE: 4027441.01
-      valid: log(MSE): 31.63, MAE: 5066956.13
+      train: log(MSE): 31.11, MAE: 4016538.23
+      valid: log(MSE): 31.62, MAE: 5098722.72
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(3.3s)
+(3.2s)
 Regression model with 6 trees with sizes min=1 max=7 mean=4.0
 predict our tree...
 (0.0s)
 
-      train: log(MSE): 31.66, MAE: 5405269.48
-      valid: log(MSE): 31.69, MAE: 5493914.81
+      train: log(MSE): 31.67, MAE: 5445031.24
+      valid: log(MSE): 31.68, MAE: 5465565.47
 
 
 
@@ -104,23 +101,23 @@ M5:
 
 loading from cache
 X.shape: train (37734424, 19), valid (9433606, 19)
-regression targets with min=0.0, max=763.0, mean=1.2
+regression targets with min=0.0, max=709.0, mean=1.2
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
-(38.3s)
+(37.9s)
 predict xgboost...
-(14.5s)
+(15.7s)
 
-      train: MSE: 4.58, MAE: 0.84
-      valid: MSE: 4.76, MAE: 0.84
+      train: MSE: 4.63, MAE: 0.84
+      valid: MSE: 4.57, MAE: 0.84
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(44.5s)
-Regression model with 10 trees with sizes min=2020 max=3280 mean=2995.6
+(40.3s)
+Regression model with 10 trees with sizes min=1999 max=3280 mean=3013.3
 predict our tree...
-(3.8s)
+(4.0s)
 
-      train: MSE: 3.97, MAE: 0.84
-      valid: MSE: 4.62, MAE: 0.84
+      train: MSE: 3.96, MAE: 0.84
+      valid: MSE: 4.49, MAE: 0.84
 
 
 
@@ -130,21 +127,21 @@ loading from cache
 X.shape: train (33112214, 75), valid (8278053, 75)
 regression targets with min=0.0, max=5000.0, mean=7.3
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
-(138.6s)
+(133.9s)
 predict xgboost...
-(44.6s)
+(47.0s)
 
-      train: MSE: 177.99, MAE: 3.87
-      valid: MSE: 187.11, MAE: 3.88
+      train: MSE: 179.66, MAE: 3.87
+      valid: MSE: 183.58, MAE: 3.88
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=10, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(173.6s)
+(135.7s)
 Regression model with 10 trees with sizes min=3280 max=3280 mean=3280.0
 predict our tree...
-(5.1s)
+(5.4s)
 
-      train: MSE: 108.42, MAE: 3.59
-      valid: MSE: 165.13, MAE: 3.66
+      train: MSE: 108.39, MAE: 3.59
+      valid: MSE: 161.91, MAE: 3.65
 
 rm trees/c/tree.cpython-38-darwin.so # TODO make properly
 python setup.py build_ext --build-lib trees/c --build-temp trees/c
@@ -152,17 +149,6 @@ running build_ext
 building 'tree' extension
 clang -Wno-unused-result -Wsign-compare -Wunreachable-code -fno-common -dynamic -DNDEBUG -g -fwrapv -O3 -Wall -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk -I/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include -I/Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/System/Library/Frameworks/Tk.framework/Versions/8.5/Headers -I/usr/local/lib -I/usr/local/lib/python3.8/site-packages/numpy/core/include/numpy/ -I/usr/local/include -I/usr/local/opt/openssl@1.1/include -I/usr/local/opt/sqlite/include -I/usr/local/opt/python@3.8/Frameworks/Python.framework/Versions/3.8/include/python3.8 -c trees/c/tree.c -o trees/c/trees/c/tree.o -fopenmp -ffast-math
 clang -bundle -undefined dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk trees/c/trees/c/tree.o -L/usr/local/lib -L/usr/local/opt/openssl@1.1/lib -L/usr/local/opt/sqlite/lib -o trees/c/tree.cpython-38-darwin.so -lomp
-python -m pytest
-============================== test session starts ==============================
-platform darwin -- Python 3.8.2, pytest-5.3.5, py-1.8.1, pluggy-0.13.1
-rootdir: /Users/benji/dev/trees
-collected 5 items
-
-test/test_binning.py ..                                                   [ 40%]
-test/test_model.py .                                                      [ 60%]
-test/test_trees.py ..                                                     [100%]
-
-=============================== 5 passed in 0.89s ===============================
 python -m trees.benchmarks
 
 
@@ -172,23 +158,23 @@ TREE_COUNT=100
 Agaricus:
 
 X.shape: train (5211, 126), valid (1302, 126)
-binary classification with 2498 true and 2713 false
+binary classification with 2484 true and 2727 false
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
 (0.1s)
 predict xgboost...
 (0.0s)
 
-      train preds bincount: [2713 2498]
+      train preds bincount: [2727 2484]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
 (0.5s)
-Classification model with 33 trees with sizes min=1 max=43 mean=31.727272727272727
+Classification model with 36 trees with sizes min=1 max=49 mean=34.0
 predict our tree...
 (0.0s)
 
-      train preds bincount: [2713 2498]
+      train preds bincount: [2727 2484]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
       valid: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
 
@@ -197,71 +183,71 @@ predict our tree...
 House Prices:
 
 X.shape: train (1168, 79), valid (292, 79)
-regression targets with min=35311.0, max=755000.0, mean=180488.5
+regression targets with min=34900.0, max=755000.0, mean=181796.9
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
 (0.1s)
 predict xgboost...
 (0.0s)
 
-      train: log(MSE): 13.99, MAE: 764.64
-      valid: log(MSE): 20.54, MAE: 17806.13
+      train: log(MSE): 13.88, MAE: 722.71
+      valid: log(MSE): 20.07, MAE: 16626.94
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
 (0.1s)
-Regression model with 11 trees with sizes min=1 max=10 mean=5.636363636363637
+Regression model with 11 trees with sizes min=1 max=10 mean=5.363636363636363
 predict our tree...
 (0.0s)
 
-      train: log(MSE): 20.92, MAE: 23088.33
-      valid: log(MSE): 21.37, MAE: 26430.05
+      train: log(MSE): 21.07, MAE: 24256.81
+      valid: log(MSE): 20.71, MAE: 23437.20
 
 
 
 Home Credit Default:
 
 X.shape: train (246009, 104), valid (61502, 104)
-binary classification with 19909 true and 226100 false
+binary classification with 19812 true and 226197 false
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
-(2.7s)
+(2.9s)
 predict xgboost...
-(0.5s)
+(0.6s)
 
-      train preds bincount: [244654   1355]
-      train: accuracy = 92.22%, precision = 78.60%, recall = 5.35%
-      valid: accuracy = 91.97%, precision = 45.89%, recall = 2.73%
+      train preds bincount: [244655   1354]
+      train: accuracy = 92.28%, precision = 79.99%, recall = 5.47%
+      valid: accuracy = 91.83%, precision = 47.60%, recall = 2.37%
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(1.8s)
-Classification model with 12 trees with sizes min=1 max=58 mean=23.75
+(1.9s)
+Classification model with 12 trees with sizes min=1 max=52 mean=24.5
 predict our tree...
 (0.1s)
 
       train preds bincount: [246009]
-      train: accuracy = 91.91%, precision = 0.00%, recall = 0.00%
-      valid: accuracy = 92.01%, precision = 0.00%, recall = 0.00%
+      train: accuracy = 91.95%, precision = 0.00%, recall = 0.00%
+      valid: accuracy = 91.85%, precision = 0.00%, recall = 0.00%
 
 
 
 Santander Value:
 
 X.shape: train (3568, 4991), valid (891, 4991)
-regression targets with min=30000.0, max=40000000.0, mean=5906989.2
+regression targets with min=30000.0, max=40000000.0, mean=6005454.2
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
-(8.1s)
+(8.0s)
 predict xgboost...
 (0.3s)
 
-      train: log(MSE): 30.05, MAE: 2306992.81
-      valid: log(MSE): 31.65, MAE: 4999896.26
+      train: log(MSE): 30.03, MAE: 2298355.58
+      valid: log(MSE): 31.61, MAE: 4987607.32
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(3.2s)
+(3.3s)
 Regression model with 6 trees with sizes min=1 max=7 mean=4.0
 predict our tree...
 (0.0s)
 
-      train: log(MSE): 31.66, MAE: 5444841.08
-      valid: log(MSE): 31.72, MAE: 5471810.84
+      train: log(MSE): 31.68, MAE: 5487202.63
+      valid: log(MSE): 31.61, MAE: 5340257.55
 
 
 
@@ -271,21 +257,21 @@ loading from cache
 X.shape: train (37734424, 19), valid (9433606, 19)
 regression targets with min=0.0, max=763.0, mean=1.2
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
-(110.9s)
+(115.3s)
 predict xgboost...
-(21.6s)
+(25.2s)
 
       train: MSE: 4.41, MAE: 0.83
-      valid: MSE: 4.57, MAE: 0.83
+      valid: MSE: 4.53, MAE: 0.83
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(97.0s)
-Regression model with 24 trees with sizes min=1 max=3280 mean=1942.625
+(111.3s)
+Regression model with 32 trees with sizes min=1 max=3280 mean=1516.1875
 predict our tree...
-(7.2s)
+(10.2s)
 
-      train: MSE: 3.75, MAE: 0.82
-      valid: MSE: 4.57, MAE: 0.83
+      train: MSE: 3.74, MAE: 0.82
+      valid: MSE: 4.52, MAE: 0.83
 
 
 
@@ -295,18 +281,18 @@ loading from cache
 X.shape: train (33112214, 75), valid (8278053, 75)
 regression targets with min=0.0, max=5000.0, mean=7.3
 train xgboost with: {'n_estimators': 100, 'tree_method': 'hist'}...
-(240.9s)
+(246.0s)
 predict xgboost...
-(55.3s)
+(54.9s)
 
-      train: MSE: 134.77, MAE: 3.67
-      valid: MSE: 163.76, MAE: 3.69
+      train: MSE: 135.87, MAE: 3.67
+      valid: MSE: 157.23, MAE: 3.69
 
 train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
-(615.7s)
-Regression model with 43 trees with sizes min=1 max=3280 mean=1991.5348837209303
+(451.2s)
+Regression model with 38 trees with sizes min=1 max=3280 mean=2066.9736842105262
 predict our tree...
-(22.9s)
+(22.3s)
 
-      train: MSE: 78.62, MAE: 3.41
-      valid: MSE: 149.99, MAE: 3.53
+      train: MSE: 81.22, MAE: 3.43
+      valid: MSE: 148.79, MAE: 3.54
