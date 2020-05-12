@@ -127,9 +127,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint64_t * __restrict memberships [max_nodes];
 
     // [col, node, v] => stat
-    uint64_t * __restrict saved_counts = calloc(cols * max_nodes * vals, sizeof(uint64_t));
-    double * __restrict saved_sums = calloc(cols * max_nodes * vals, sizeof(double));
-    double * __restrict saved_sum_sqs = calloc(cols * max_nodes * vals, sizeof(double));
+    uint64_t * __restrict counts = calloc(cols * max_nodes * vals, sizeof(uint64_t));
+    double * __restrict sums = calloc(cols * max_nodes * vals, sizeof(double));
+    double * __restrict sum_sqs = calloc(cols * max_nodes * vals, sizeof(double));
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
@@ -198,18 +198,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     while (depth++ < max_depth && node_count < max_nodes - 2 && done_count < node_count) {
         gettimeofday(&stat_start, NULL);
 
+        // build histograms for this entire level, feature-parallel
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
-
             for (uint16_t n = done_count; n < node_count; n++) {
-
                 if (node_counts[n] == 0) continue;
-
-                // min leaf size is 1 for left & right, 0 for mid
-                // but in those cases we still need to update stats in case our siblings depend on them
-                uint64_t counts [vals];
-                double sums [vals];
-                double sum_sqs [vals];
 
                 if (should_subtract[n]) {
                     // instead of summing stats from data,
@@ -221,44 +214,55 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     uint16_t sis = n-2;
 
                     for (uint v = 0; v < vals; v++) {
+                        uint64_t i = c*max_nodes*vals + n*vals + v;
 
-                        counts[v] = saved_counts[c*max_nodes*vals + parent*vals + v]
-                                  - saved_counts[c*max_nodes*vals + bro*vals + v]
-                                  - saved_counts[c*max_nodes*vals + sis*vals + v];
+                        counts[i] = counts[c*max_nodes*vals + parent*vals + v]
+                                  - counts[c*max_nodes*vals + bro*vals + v]
+                                  - counts[c*max_nodes*vals + sis*vals + v];
 
-                        sums[v] = saved_sums[c*max_nodes*vals + parent*vals + v]
-                                  - saved_sums[c*max_nodes*vals + bro*vals + v]
-                                  - saved_sums[c*max_nodes*vals + sis*vals + v];
+                        sums[i] = sums[c*max_nodes*vals + parent*vals + v]
+                                  - sums[c*max_nodes*vals + bro*vals + v]
+                                  - sums[c*max_nodes*vals + sis*vals + v];
 
-                        sum_sqs[v] = saved_sum_sqs[c*max_nodes*vals + parent*vals + v]
-                                  - saved_sum_sqs[c*max_nodes*vals + bro*vals + v]
-                                  - saved_sum_sqs[c*max_nodes*vals + sis*vals + v];
+                        sum_sqs[i] = sum_sqs[c*max_nodes*vals + parent*vals + v]
+                                  - sum_sqs[c*max_nodes*vals + bro*vals + v]
+                                  - sum_sqs[c*max_nodes*vals + sis*vals + v];
                     }
                 } else {
                     // build histograms
                     // i.e. sum the stats for each value of X in this node
 
+                    // aggregate in thread-local variables for efficiency
+                    uint64_t local_counts [vals];
+                    double local_sums [vals];
+                    double local_sum_sqs [vals];
                     for (uint v = 0; v < vals; v++) {
-                        counts[v] = 0;
-                        sums[v] = 0.0;
-                        sum_sqs[v] = 0.0;
+                        local_counts[v] = 0;
+                        local_sums[v] = 0.0;
+                        local_sum_sqs[v] = 0.0;
                     }
+                    // the bottleneck: sum up stats for each row in this node
                     for (uint64_t i = 0; i < node_counts[n]; i++) {
                         uint64_t r = memberships[n][i];
                         uint32_t v = X[c*rows + r];
-                        counts[v]++;
-                        sums[v] += y[r];
-                        sum_sqs[v] += y[r] * y[r];
+                        local_counts[v]++;
+                        local_sums[v] += y[r];
+                        local_sum_sqs[v] += y[r] * y[r];
+                    }
+                    // now save into the larger [col, node, value] arrays
+                    for (uint v = 0; v < vals; v++) {
+                        counts[c*max_nodes*vals + n*vals + v] = local_counts[v];
+                        sums[c*max_nodes*vals + n*vals + v] = local_sums[v];
+                        sum_sqs[c*max_nodes*vals + n*vals + v] = local_sum_sqs[v];
                     }
                 }
+            }
+        }
 
-                // either way, save these so we can derive future stats
-                for (uint v = 0; v < vals; v++) {
-                    saved_counts[c*max_nodes*vals + n*vals + v] = counts[v];
-                    saved_sums[c*max_nodes*vals + n*vals + v] = sums[v];
-                    saved_sum_sqs[c*max_nodes*vals + n*vals + v] = sum_sqs[v];
-                }
-
+        // choose splits for all nodes on this level, node-parallel
+        #pragma omp parallel for
+        for (uint16_t n = done_count; n < node_count; n++) {
+            for (uint64_t c = 0; c < cols; c++) {
                 // min leaf size is 1 for left & right, 0 for mid
                 if (node_counts[n] < 2) continue;
 
@@ -268,13 +272,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double left_sum = 0.0;
                 double left_sum_sq = 0.0;
                 for (uint64_t lo = 0; lo < vals - 2; lo++) {
+                    uint64_t lo_i = c*max_nodes*vals + n*vals + lo;
 
                     // force non-empty left split
-                    if (counts[lo] == 0) continue;
+                    if (counts[lo_i] == 0) continue;
 
-                    left_count += counts[lo];
-                    left_sum += sums[lo];
-                    left_sum_sq += sum_sqs[lo];
+                    left_count += counts[lo_i];
+                    left_sum += sums[lo_i];
+                    left_sum_sq += sum_sqs[lo_i];
                     double left_var = left_sum_sq - (left_sum * left_sum / left_count);
 
                     uint64_t mid_count = 0;
@@ -283,9 +288,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                     // allow mid split to be empty in the hi == lo case ONLY
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
+                        uint64_t hi_i = c*max_nodes*vals + n*vals + hi;
                         double split_penalty;
 
-                        if (hi > lo && !counts[hi]) {
+                        if (hi > lo && counts[hi_i] == 0) {
                             // this value doesn't change the split stats
                             continue;
                         } else if (hi > lo) {
@@ -293,9 +299,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             // penalize it by a factor
                             split_penalty = penalty + third_split_penalty * penalty;
 
-                            mid_count += counts[hi];
-                            mid_sum += sums[hi];
-                            mid_sum_sq += sum_sqs[hi];
+                            mid_count += counts[hi_i];
+                            mid_sum += sums[hi_i];
+                            mid_sum_sq += sum_sqs[hi_i];
                         } else {
                             // middle split is empty
                             split_penalty = penalty;
@@ -313,40 +319,30 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
 
-                        // node_scores[n] may be stale, but it only decreases
-                        // first check without the lock for efficiency
+                        // TODO something to make sure node_scores etc are on different cache lines?
                         if (score < node_scores[n]) {
-                            // now check with the lock for correctness
-                            omp_set_lock(&node_locks[n]);
-                            if (score < node_scores[n]) {
-                                // printf("  n=%d c=%d score %f -> %f counts (%llu, %llu, %llu)\n",
-                                //     n, c, node_scores[n], score, left_count, mid_count, right_count);
+                            node_scores[n] = score;
+                            split_col[n] = c;
+                            split_lo[n] = lo;
+                            split_hi[n] = hi;
 
-                                node_scores[n] = score;
-                                split_col[n] = c;
-                                split_lo[n] = lo;
-                                split_hi[n] = hi;
+                            left_counts[n] = left_count;
+                            mid_counts[n] = mid_count;
+                            right_counts[n] = right_count;
 
-                                left_counts[n] = left_count;
-                                mid_counts[n] = mid_count;
-                                right_counts[n] = right_count;
+                            left_sums[n] = left_sum;
+                            mid_sums[n] = mid_sum;
+                            right_sums[n] = right_sum;
 
-                                left_sums[n] = left_sum;
-                                mid_sums[n] = mid_sum;
-                                right_sums[n] = right_sum;
+                            left_sum_sqs[n] = left_sum_sq;
+                            mid_sum_sqs[n] = mid_sum_sq;
+                            right_sum_sqs[n] = right_sum_sq;
 
-                                left_sum_sqs[n] = left_sum_sq;
-                                mid_sum_sqs[n] = mid_sum_sq;
-                                right_sum_sqs[n] = right_sum_sq;
+                            left_vars[n] = left_var;
+                            mid_vars[n] = mid_var;
+                            right_vars[n] = right_var;
 
-                                left_vars[n] = left_var;
-                                mid_vars[n] = mid_var;
-                                right_vars[n] = right_var;
-
-                                should_split[n] = true;
-
-                            }
-                            omp_unset_lock(&node_locks[n]);
+                            should_split[n] = true;
                         }
                     }
                 }
@@ -480,9 +476,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         omp_destroy_lock(&node_locks[n]);
     }
 
-    free(saved_counts);
-    free(saved_sums);
-    free(saved_sum_sqs);
+    free(counts);
+    free(sums);
+    free(sum_sqs);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
