@@ -25,7 +25,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -126,6 +126,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // for each node n, an array of length node_counts[n] containing the rows in n
     uint64_t * __restrict memberships [max_nodes];
 
+    // [col, node, v] => stat
+    uint64_t * __restrict saved_counts = calloc(cols * max_nodes * vals, sizeof(uint64_t));
+    double * __restrict saved_sums = calloc(cols * max_nodes * vals, sizeof(double));
+    double * __restrict saved_sum_sqs = calloc(cols * max_nodes * vals, sizeof(double));
+
     uint16_t node_count = 1;
     uint16_t done_count = 0;
 
@@ -135,6 +140,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double   node_sum_sqs [max_nodes];
     bool     should_split [max_nodes];
     omp_lock_t node_locks [max_nodes];
+
+    // parent or -1
+    // siblings are always n-1 and n-2
+    // TODO this is hackyyyyy
+    int derive_stats_from [max_nodes];
 
     uint64_t left_counts [max_nodes];
     uint64_t mid_counts  [max_nodes];
@@ -163,6 +173,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         right_counts[n] = 0;
         omp_init_lock(&node_locks[n]);
         memberships[n] = NULL;
+
+        derive_stats_from[n] = -1;
     }
 
     memberships[0] = calloc(rows, sizeof(uint64_t));
@@ -193,34 +205,80 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint64_t c = 0; c < cols; c++) {
 
             for (uint16_t n = done_count; n < node_count; n++) {
-                // min leaf size is 1 for left & right, 0 for mid
-                if (node_counts[n] < 2) continue;
 
+                if (node_counts[n] == 0) continue;
+
+                // min leaf size is 1 for left & right, 0 for mid
+                // but in those cases we still need to update stats in case our siblings depend on them
                 uint64_t counts [vals];
                 double sums [vals];
                 double sum_sqs [vals];
 
+                if (derive_stats_from[n] == -1) {
+                    // calc stats
+                    for (uint v = 0; v < vals; v++) {
+                        counts[v] = 0;
+                        sums[v] = 0.0;
+                        sum_sqs[v] = 0.0;
+                    }
+                    for (uint64_t i = 0; i < node_counts[n]; i++) {
+                        uint64_t r = memberships[n][i];
+                        uint32_t v = X[c*rows + r];
+                        counts[v]++;
+                        sums[v] += y[r];
+                        sum_sqs[v] += y[r] * y[r];
+                    }
+                } else {
+                    // derive stats
+                    uint16_t parent = (uint16_t) derive_stats_from[n];
+                    uint16_t bro = n-1;
+                    uint16_t sis = n-2;
+                    // if (parent < 0 || bro < 0 || sis < 0) {
+                    //     printf("bad node idx\n");
+                    //     fflush(stdout);
+                    //     return NULL;
+                    // }
+
+                    for (uint v = 0; v < vals; v++) {
+
+                        counts[v] = saved_counts[c*max_nodes*vals + parent*vals + v]
+                                  - saved_counts[c*max_nodes*vals + bro*vals + v]
+                                  - saved_counts[c*max_nodes*vals + sis*vals + v];
+
+                        // if (counts[v]) {
+                        //     printf("n=%d c=%d v=%d: parent %llu - bro %llu - sis %llu = counts[v] %llu\n",
+                        //         n, c, v,
+                        //         saved_counts[c*max_nodes*vals + parent*vals + v],
+                        //         saved_counts[c*max_nodes*vals + bro*vals + v],
+                        //         saved_counts[c*max_nodes*vals + sis*vals + v],
+                        //         counts[v]);
+                        //     printf("node_counts[n]=%llu, node_counts[parent]=%llu\n", node_counts[n], node_counts[parent]);
+                        // }
+
+                        sums[v] = saved_sums[c*max_nodes*vals + parent*vals + v]
+                                  - saved_sums[c*max_nodes*vals + bro*vals + v]
+                                  - saved_sums[c*max_nodes*vals + sis*vals + v];
+                        sum_sqs[v] = saved_sum_sqs[c*max_nodes*vals + parent*vals + v]
+                                  - saved_sum_sqs[c*max_nodes*vals + bro*vals + v]
+                                  - saved_sum_sqs[c*max_nodes*vals + sis*vals + v];
+                    }
+                }
+                // either way, save these so we can derive future stats
                 for (uint v = 0; v < vals; v++) {
-                    counts[v] = 0;
-                    sums[v] = 0.0;
-                    sum_sqs[v] = 0.0;
+                    saved_counts[c*max_nodes*vals + n*vals + v] = counts[v];
+                    saved_sums[c*max_nodes*vals + n*vals + v] = sums[v];
+                    saved_sum_sqs[c*max_nodes*vals + n*vals + v] = sum_sqs[v];
                 }
 
-                // stats
-                for (uint64_t i = 0; i < node_counts[n]; i++) {
-                    uint64_t r = memberships[n][i];
-                    uint32_t v = X[c*rows + r];
-                    counts[v]++;
-                    sums[v] += y[r];
-                    sum_sqs[v] += y[r] * y[r];
-                }
+                // min leaf size is 1 for left & right, 0 for mid
+                if (node_counts[n] < 2) continue;
 
+
+                // evaluate each possible splitting point
                 // running sums from the left side
                 uint64_t left_count = 0;
                 double left_sum = 0.0;
                 double left_sum_sq = 0.0;
-
-                // evaluate each possible splitting point
                 for (uint64_t lo = 0; lo < vals - 2; lo++) {
                     uint64_t lo_i = lo; // TODO
 
@@ -276,9 +334,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             // now check with the lock for correctness
                             omp_set_lock(&node_locks[n]);
                             if (score < node_scores[n]) {
-                                // printf("n=%d c=%d score: %.4f -> %.4f (%d, %d, %d)\n", n, c,
-                                //     node_scores[n], score,
-                                //     left_count, mid_count, right_count);
+                                // printf("  n=%d c=%d score %f -> %f counts (%llu, %llu, %llu)\n",
+                                //     n, c, node_scores[n], score, left_count, mid_count, right_count);
 
                                 node_scores[n] = score;
                                 split_col[n] = c;
@@ -320,9 +377,27 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         int new_node_count = node_count;
         for (uint16_t n = 0; n < node_count; n++) {
             if (should_split[n] && new_node_count <= max_nodes - 3) {
-                left_childs[n] = new_node_count;
-                mid_childs[n] = new_node_count + 1;
-                right_childs[n] = new_node_count + 2;
+
+                // largest sibling is going to have derived stats
+                // so it must have the highest ID to be processed last
+                // (the order of the other 2 doesn't matter)
+                // TODO less hacky
+                if (left_counts[n] > mid_counts[n] && left_counts[n] > right_counts[n]) {
+                    mid_childs[n] = new_node_count + 0;
+                    right_childs[n] = new_node_count + 1;
+                    left_childs[n] = new_node_count + 2;
+                    derive_stats_from[left_childs[n]] = n;
+                } else if (mid_counts[n] > right_counts[n]) {
+                    left_childs[n] = new_node_count + 0;
+                    right_childs[n] = new_node_count + 1;
+                    mid_childs[n] = new_node_count + 2;
+                    derive_stats_from[mid_childs[n]] = n;
+                } else {
+                    left_childs[n] = new_node_count + 0;
+                    mid_childs[n] = new_node_count + 1;
+                    right_childs[n] = new_node_count + 2;
+                    derive_stats_from[right_childs[n]] = n;
+                }
 
                 node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
                 node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
@@ -339,6 +414,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_sum_sqs[left_childs[n]] = left_sum_sqs[n];
                 node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
                 node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
+
+                // printf("  %d [%llu] => (%d [%llu], %d [%llu], %d [%llu])\n",
+                //     n, node_counts[n],
+                //     left_childs[n], node_counts[left_childs[n]],
+                //     mid_childs[n], node_counts[mid_childs[n]],
+                //     right_childs[n], node_counts[right_childs[n]]);
+                // fflush(stdout);
 
                 new_node_count += 3;
             } else if (should_split[n]) {
@@ -419,6 +501,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         free(memberships[n]);
     }
 
+    free(saved_counts);
+    free(saved_sums);
+    free(saved_sum_sqs);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
