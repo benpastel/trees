@@ -41,14 +41,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     struct timeval total_start;
     struct timeval init_end;
     struct timeval stat_start;
-    struct timeval split_start;
+    struct timeval choose_split_start;
+    struct timeval make_split_start;
     struct timeval split_end;
     struct timeval post_start;
     struct timeval total_end;
     long stat_ms = 0;
-    long split_ms = 0;
+    long choose_split_ms = 0;
+    long make_split_ms = 0;
     gettimeofday(&total_start, NULL);
-
 
     // parse input arguments
     if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!didi",
@@ -259,6 +260,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
         }
 
+        gettimeofday(&choose_split_start, NULL);
+        stat_ms += msec(stat_start, choose_split_start);
+
         // choose splits for all nodes on this level, node-parallel
         #pragma omp parallel for
         for (uint16_t n = done_count; n < node_count; n++) {
@@ -349,8 +353,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
         }
 
-        gettimeofday(&split_start, NULL);
-        stat_ms += msec(stat_start, split_start);
+        gettimeofday(&make_split_start, NULL);
+        choose_split_ms += msec(choose_split_start, make_split_start);
 
         // we've finised choosing the splits
 
@@ -450,7 +454,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         }
 
         gettimeofday(&split_end, NULL);
-        split_ms += msec(split_start, split_end);
+        make_split_ms += msec(make_split_start, split_end);
     }
 
     gettimeofday(&post_start, NULL);
@@ -492,13 +496,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     gettimeofday(&total_end, NULL);
 #if VERBOSE
-    printf("Fit depth %d / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
+    printf("Fit depth %d / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f choose splits, %.1f make splits, %.1f post\n",
         depth,
         node_count,
         ((float) msec(total_start, total_end)) / 1000.0,
         ((float) msec(total_start, init_end)) / 1000.0,
         ((float) stat_ms) / 1000.0,
-        ((float) split_ms) / 1000.0,
+        ((float) choose_split_ms) / 1000.0,
+        ((float) make_split_ms) / 1000.0,
         ((float) msec(post_start, total_end)) / 1000.0);
 #endif
 
