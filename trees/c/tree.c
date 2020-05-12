@@ -123,7 +123,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
 
-    uint16_t * __restrict memberships = calloc(rows, sizeof(uint16_t));
+    // for each node n, an array of length node_counts[n] containing the rows in n
+    uint64_t * __restrict memberships [max_nodes];
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
@@ -161,7 +162,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         mid_counts[n] = 0;
         right_counts[n] = 0;
         omp_init_lock(&node_locks[n]);
+        memberships[n] = NULL;
     }
+
+    memberships[0] = calloc(rows, sizeof(uint64_t));
 
     // find the baseline of the root
     // accumulate in local variables so clang vectorizes
@@ -170,6 +174,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     for (uint64_t r = 0; r < rows; r++) {
         root_sum += y[r];
         root_sum_sq += y[r] * y[r];
+        memberships[0][r] = r;
     }
     const double root_var = (root_sum_sq / rows) - (root_sum / rows) * (root_sum / rows);
     const double penalty = root_var * smooth_factor;
@@ -182,29 +187,33 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     int depth = 0;
     while (depth++ < max_depth && node_count < max_nodes - 2 && done_count < node_count) {
-
         gettimeofday(&stat_start, NULL);
 
         #pragma omp parallel for
         for (uint64_t c = 0; c < cols; c++) {
-            uint64_t * __restrict counts = calloc(node_count * vals, sizeof(uint64_t));
-            double * __restrict sums = calloc(node_count * vals, sizeof(double));
-            double * __restrict sum_sqs = calloc(node_count * vals, sizeof(double));
 
-            // stats
-            for (uint64_t r = 0; r < rows; r++) {
-                uint32_t v = X[c*rows + r];
-                uint32_t n = memberships[r];
-                uint32_t idx = n*vals + v;
-                counts[idx]++;
-                sums[idx] += y[r];
-                sum_sqs[idx] += y[r] * y[r];
-            }
-
-            // splits
             for (uint16_t n = done_count; n < node_count; n++) {
                 // min leaf size is 1 for left & right, 0 for mid
                 if (node_counts[n] < 2) continue;
+
+                uint64_t counts [vals];
+                double sums [vals];
+                double sum_sqs [vals];
+
+                for (uint v = 0; v < vals; v++) {
+                    counts[v] = 0;
+                    sums[v] = 0.0;
+                    sum_sqs[v] = 0.0;
+                }
+
+                // stats
+                for (uint64_t i = 0; i < node_counts[n]; i++) {
+                    uint64_t r = memberships[n][i];
+                    uint32_t v = X[c*rows + r];
+                    counts[v]++;
+                    sums[v] += y[r];
+                    sum_sqs[v] += y[r] * y[r];
+                }
 
                 // running sums from the left side
                 uint64_t left_count = 0;
@@ -213,7 +222,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                 // evaluate each possible splitting point
                 for (uint64_t lo = 0; lo < vals - 2; lo++) {
-                    uint64_t lo_i = n*vals + lo;
+                    uint64_t lo_i = lo; // TODO
 
                     // force non-empty left split
                     if (counts[lo_i] == 0) continue;
@@ -229,7 +238,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                     // allow mid split to be empty in the hi == lo case ONLY
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
-                        uint64_t hi_i = n*vals + hi;
+                        uint64_t hi_i = hi; // TODO
 
                         double split_penalty;
 
@@ -267,6 +276,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             // now check with the lock for correctness
                             omp_set_lock(&node_locks[n]);
                             if (score < node_scores[n]) {
+                                // printf("n=%d c=%d score: %.4f -> %.4f (%d, %d, %d)\n", n, c,
+                                //     node_scores[n], score,
+                                //     left_count, mid_count, right_count);
+
                                 node_scores[n] = score;
                                 split_col[n] = c;
                                 split_lo[n] = lo;
@@ -289,16 +302,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 right_vars[n] = right_var;
 
                                 should_split[n] = true;
+
                             }
                             omp_unset_lock(&node_locks[n]);
                         }
                     }
                 }
             }
-            free(counts);
-            free(sums);
-            free(sum_sqs);
         }
+
         gettimeofday(&split_start, NULL);
         stat_ms += msec(stat_start, split_start);
 
@@ -337,19 +349,43 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         // update memberships
         #pragma omp parallel for
-        for (uint64_t r = 0; r < rows; r++) {
-            uint16_t n = memberships[r];
+        for (uint16_t n = done_count; n < node_count; n++) {
             if (!should_split[n]) continue;
 
-            uint8_t v = X[split_col[n]*rows + r];
+            uint64_t left_i = 0;
+            uint64_t mid_i = 0;
+            uint64_t right_i = 0;
 
-            uint16_t child = (
-                v <= split_lo[n] ? left_childs[n] :
-                v <= split_hi[n] ? mid_childs[n] :
-                right_childs[n]);
+            uint16_t left = left_childs[n];
+            uint16_t mid = mid_childs[n];
+            uint16_t right = right_childs[n];
 
-            memberships[r] = child;
+            memberships[left] = calloc(node_counts[left], sizeof(uint64_t));
+            if (node_counts[mid] > 0) {
+                memberships[mid] = calloc(node_counts[mid], sizeof(uint64_t));
+            }
+            memberships[right] = calloc(node_counts[right], sizeof(uint64_t));
+
+            for (uint64_t i = 0; i < node_counts[n]; i++) {
+                uint64_t r = memberships[n][i];
+                uint8_t v = X[split_col[n]*rows + r];
+
+                if (v <= split_lo[n]) {
+                    memberships[left][left_i++] = r;
+                } else if (v <= split_hi[n]) {
+                    memberships[mid][mid_i++] = r;
+                } else {
+                    memberships[right][right_i++] = r;
+                }
+            }
+            // TODO can update node_means and de-alloc parent now?
+            //
+            // if (left_i != node_counts[left] || mid_i != node_counts[mid] || right_i != node_counts[right]) {
+            //     printf("bad memberships: %llu, %llu, %llu\n", left_i, mid_i, right_i);
+            //     return NULL;
+            // }
         }
+
         done_count = node_count;
         node_count = new_node_count;
         for (uint16_t n = 0; n < node_count; n++) {;
@@ -359,25 +395,30 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         gettimeofday(&split_end, NULL);
         split_ms += msec(split_start, split_end);
     }
+
     gettimeofday(&post_start, NULL);
 
-    // calculate the mean at each leaf node
+    // calculate the mean at each leaf node & predictions
+    // TODO this is only accidentally correct; overwriting internal preds with leaf preds
+    // only keep the leaf memberships around
+    //
+    // #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
-        if (node_counts[n] > 0) {
-            node_means[n] = node_sums[n] / node_counts[n];
+        if (node_counts[n] == 0) continue;
+
+        double mean = node_sums[n] / node_counts[n];
+        for (uint64_t i = 0; i < node_counts[n]; i++) {
+            uint64_t r = memberships[n][i];
+            preds[r] = mean;
         }
-    }
-    // find the prediction for each leaf
-    #pragma omp parallel for
-    for (uint64_t r = 0; r < rows; r++) {
-        preds[r] = node_means[memberships[r]];
+        node_means[n] = mean;
     }
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         omp_destroy_lock(&node_locks[n]);
+        free(memberships[n]);
     }
 
-    free(memberships);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
