@@ -484,9 +484,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // TODO this is only accidentally correct; overwriting internal preds with leaf preds
     // only keep the leaf memberships around
     //
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
-        if (node_counts[n] == 0) continue;
+        // write predictions for non-empty leaves only
+        if (!node_counts[n] || left_childs[n]) continue;
 
         double mean = node_sums[n] / node_counts[n];
         for (uint64_t i = 0; i < node_counts[n]; i++) {
