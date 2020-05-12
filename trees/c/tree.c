@@ -27,6 +27,12 @@ static float msec(struct timeval t0, struct timeval t1)
 
 #define VERBOSE 1
 
+struct hist {
+    uint64_t count;
+    double sum;
+    double sum_sq;
+};
+
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg, *y_arg;
@@ -123,53 +129,46 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
 
-    // for each node n, an array of length node_counts[n] containing the rows in n
+    // for each node n, an array of length node_hists[n].count containing the rows in n
     uint64_t * __restrict memberships [max_nodes];
 
-    // [col, node, v] => stat
-    uint64_t * __restrict saved_counts = calloc(cols * max_nodes * vals, sizeof(uint64_t));
-    double * __restrict saved_sums = calloc(cols * max_nodes * vals, sizeof(double));
-    double * __restrict saved_sum_sqs = calloc(cols * max_nodes * vals, sizeof(double));
+    // [col, node, v] => (count, sum, sum_sq)
+    // persist between multiple levels of the tree so we can find some values by subtraction
+    struct hist * __restrict col_node_hists = calloc(cols * max_nodes * vals, sizeof(struct hist));
 
     uint16_t node_count = 1;
     uint16_t done_count = 0;
 
+    struct hist node_hists [max_nodes];
     double   node_scores  [max_nodes];
-    uint64_t node_counts  [max_nodes];
-    double   node_sums    [max_nodes];
-    double   node_sum_sqs [max_nodes];
     uint16_t node_parents [max_nodes];
     bool     should_split [max_nodes];
     bool     should_subtract [max_nodes];
     omp_lock_t node_locks [max_nodes];
 
-    uint64_t left_counts [max_nodes];
-    uint64_t mid_counts  [max_nodes];
-    uint64_t right_counts[max_nodes];
-
-    double left_sums [max_nodes];
-    double mid_sums  [max_nodes];
-    double right_sums [max_nodes];
-
-    double left_sum_sqs[max_nodes];
-    double mid_sum_sqs[max_nodes];
-    double right_sum_sqs[max_nodes];
+    struct hist left_hists  [max_nodes];
+    struct hist mid_hists   [max_nodes];
+    struct hist right_hists [max_nodes];
 
     double left_vars  [max_nodes];
     double mid_vars   [max_nodes];
     double right_vars [max_nodes];
 
     for (uint16_t n = 0; n < max_nodes; n++) {
+        node_hists[n] = (struct hist) {0L, 0.0, 0.0};
         node_scores[n] = DBL_MAX;
-        node_counts[n] = 0;
-        node_sums[n] = 0.0;
-        node_sum_sqs[n] = 0.0;
         node_parents[n] = 0;
         should_split[n] = false;
         should_subtract[n] = false;
-        left_counts[n] = 0;
-        mid_counts[n] = 0;
-        right_counts[n] = 0;
+
+        left_hists[n] = (struct hist) {0L, 0.0, 0.0 };
+        mid_hists[n] = (struct hist) {0L, 0.0, 0.0 };
+        right_hists[n] = (struct hist) {0L, 0.0, 0.0 };
+
+        left_vars[n] = 0;
+        mid_vars[n] = 0;
+        right_vars[n] = 0;
+
         omp_init_lock(&node_locks[n]);
         memberships[n] = NULL;
     }
@@ -187,9 +186,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     }
     const double root_var = (root_sum_sq / rows) - (root_sum / rows) * (root_sum / rows);
     const double penalty = root_var * smooth_factor;
-    node_counts[0] = rows;
-    node_sums[0] = root_sum;
-    node_sum_sqs[0] = root_sum_sq;
+    node_hists[0] = (struct hist) {rows, root_sum, root_sum_sq};
     node_scores[0] = root_var;
 
     gettimeofday(&init_end, NULL);
@@ -203,64 +200,50 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint16_t n = done_count; n < node_count; n++) {
 
-                if (node_counts[n] == 0) continue;
+                if (node_hists[n].count == 0) continue;
 
                 // min leaf size is 1 for left & right, 0 for mid
-                // but in those cases we still need to update stats in case our siblings depend on them
-                uint64_t counts [vals];
-                double sums [vals];
-                double sum_sqs [vals];
+                // but in those cases we still need to update hists in case our siblings depend on them
+                struct hist hists [vals];
 
                 if (should_subtract[n]) {
-                    // instead of summing stats from data,
+                    // instead of summing hists from data,
                     // derive from (parents - siblings)
                     // this requires that we've already calculated the siblings
                     // so the siblings must be at n-1 and n-2
-                    uint16_t parent = node_parents[n];
-                    uint16_t bro = n-1;
-                    uint16_t sis = n-2;
-
                     for (uint v = 0; v < vals; v++) {
+                        struct hist parent = col_node_hists[c*max_nodes*vals + node_parents[n]*vals + v];
+                        struct hist bro = col_node_hists[c*max_nodes*vals + (n-1)*vals + v];
+                        struct hist sis = col_node_hists[c*max_nodes*vals + (n-2)*vals + v];
 
-                        counts[v] = saved_counts[c*max_nodes*vals + parent*vals + v]
-                                  - saved_counts[c*max_nodes*vals + bro*vals + v]
-                                  - saved_counts[c*max_nodes*vals + sis*vals + v];
-
-                        sums[v] = saved_sums[c*max_nodes*vals + parent*vals + v]
-                                  - saved_sums[c*max_nodes*vals + bro*vals + v]
-                                  - saved_sums[c*max_nodes*vals + sis*vals + v];
-
-                        sum_sqs[v] = saved_sum_sqs[c*max_nodes*vals + parent*vals + v]
-                                  - saved_sum_sqs[c*max_nodes*vals + bro*vals + v]
-                                  - saved_sum_sqs[c*max_nodes*vals + sis*vals + v];
+                        hists[v] = (struct hist) {
+                            parent.count  - bro.count  - sis.count,
+                            parent.sum    - bro.sum    - sis.sum,
+                            parent.sum_sq - bro.sum_sq - sis.sum_sq
+                        };
                     }
                 } else {
                     // build histograms
-                    // i.e. sum the stats for each value of X in this node
-
+                    // i.e. sum the hists for each value of X in this node
                     for (uint v = 0; v < vals; v++) {
-                        counts[v] = 0;
-                        sums[v] = 0.0;
-                        sum_sqs[v] = 0.0;
+                        hists[v] = (struct hist) {0L, 0.0, 0.0};
                     }
-                    for (uint64_t i = 0; i < node_counts[n]; i++) {
+                    for (uint64_t i = 0; i < node_hists[n].count; i++) {
                         uint64_t r = memberships[n][i];
                         uint32_t v = X[c*rows + r];
-                        counts[v]++;
-                        sums[v] += y[r];
-                        sum_sqs[v] += y[r] * y[r];
+                        hists[v].count++;
+                        hists[v].sum += y[r];
+                        hists[v].sum_sq += y[r]*y[r];
                     }
                 }
 
-                // either way, save these so we can derive future stats
+                // either way, save these so we can derive future hists
                 for (uint v = 0; v < vals; v++) {
-                    saved_counts[c*max_nodes*vals + n*vals + v] = counts[v];
-                    saved_sums[c*max_nodes*vals + n*vals + v] = sums[v];
-                    saved_sum_sqs[c*max_nodes*vals + n*vals + v] = sum_sqs[v];
+                    col_node_hists[c*max_nodes*vals + n*vals + v] = hists[v];
                 }
 
                 // min leaf size is 1 for left & right, 0 for mid
-                if (node_counts[n] < 2) continue;
+                if (node_hists[n].count < 2) continue;
 
                 // evaluate each possible splitting point
                 // running sums from the left side
@@ -270,11 +253,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 for (uint64_t lo = 0; lo < vals - 2; lo++) {
 
                     // force non-empty left split
-                    if (counts[lo] == 0) continue;
+                    if (hists[lo].count == 0) continue;
 
-                    left_count += counts[lo];
-                    left_sum += sums[lo];
-                    left_sum_sq += sum_sqs[lo];
+                    left_count += hists[lo].count;
+                    left_sum += hists[lo].sum;
+                    left_sum_sq += hists[lo].sum_sq;
                     double left_var = left_sum_sq - (left_sum * left_sum / left_count);
 
                     uint64_t mid_count = 0;
@@ -285,25 +268,25 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
                         double split_penalty;
 
-                        if (hi > lo && !counts[hi]) {
-                            // this value doesn't change the split stats
+                        if (hi > lo && !hists[hi].count) {
+                            // this value doesn't change the split hists
                             continue;
                         } else if (hi > lo) {
                             // middle split is nonempty
                             // penalize it by a factor
                             split_penalty = penalty + third_split_penalty * penalty;
 
-                            mid_count += counts[hi];
-                            mid_sum += sums[hi];
-                            mid_sum_sq += sum_sqs[hi];
+                            mid_count += hists[hi].count;
+                            mid_sum += hists[hi].sum;
+                            mid_sum_sq += hists[hi].sum_sq;
                         } else {
                             // middle split is empty
                             split_penalty = penalty;
                         }
 
-                        uint64_t right_count = node_counts[n] - left_count - mid_count;
-                        double right_sum = node_sums[n] - left_sum - mid_sum;
-                        double right_sum_sq = node_sum_sqs[n] - left_sum_sq - mid_sum_sq;
+                        uint64_t right_count = node_hists[n].count - left_count - mid_count;
+                        double right_sum = node_hists[n].sum - left_sum - mid_sum;
+                        double right_sum_sq = node_hists[n].sum_sq - left_sum_sq - mid_sum_sq;
 
                         // force non-empty right split
                         if (right_count == 0) break;
@@ -311,7 +294,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         // weighted average of splits' variance
                         double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
-                        double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
+                        double score = (left_var + mid_var + right_var + split_penalty) / node_hists[n].count;
 
                         // node_scores[n] may be stale, but it only decreases
                         // first check without the lock for efficiency
@@ -327,17 +310,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                 split_lo[n] = lo;
                                 split_hi[n] = hi;
 
-                                left_counts[n] = left_count;
-                                mid_counts[n] = mid_count;
-                                right_counts[n] = right_count;
-
-                                left_sums[n] = left_sum;
-                                mid_sums[n] = mid_sum;
-                                right_sums[n] = right_sum;
-
-                                left_sum_sqs[n] = left_sum_sq;
-                                mid_sum_sqs[n] = mid_sum_sq;
-                                right_sum_sqs[n] = right_sum_sq;
+                                left_hists[n] = (struct hist) {left_count, left_sum, left_sum_sq};
+                                mid_hists[n] = (struct hist) {mid_count, mid_sum, mid_sum_sq};
+                                right_hists[n] = (struct hist) {right_count, right_sum, right_sum_sq};
 
                                 left_vars[n] = left_var;
                                 mid_vars[n] = mid_var;
@@ -363,15 +338,15 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = 0; n < node_count; n++) {
             if (should_split[n] && new_node_count <= max_nodes - 3) {
 
-                // child with the most data is going to derive stats by subtraction
+                // child with the most data is going to derive hists by subtraction
                 // so it must go last
-                if (left_counts[n] > mid_counts[n] && left_counts[n] > right_counts[n]) {
+                if (left_hists[n].count > mid_hists[n].count && left_hists[n].count > right_hists[n].count) {
                     // left last
                     mid_childs[n] = new_node_count + 0;
                     right_childs[n] = new_node_count + 1;
                     left_childs[n] = new_node_count + 2;
                     should_subtract[left_childs[n]] = true;
-                } else if (mid_counts[n] > right_counts[n]) {
+                } else if (mid_hists[n].count > right_hists[n].count) {
                     // mid last
                     left_childs[n] = new_node_count + 0;
                     right_childs[n] = new_node_count + 1;
@@ -388,21 +363,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_parents[mid_childs[n]] = n;
                 node_parents[right_childs[n]] = n;
 
-                node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
-                node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
-                node_scores[right_childs[n]] = right_vars[n] / right_counts[n];
+                node_scores[left_childs[n]] = left_vars[n] / left_hists[n].count;
+                node_scores[mid_childs[n]] = (mid_hists[n].count == 0) ? 0 : mid_vars[n] / mid_hists[n].count;
+                node_scores[right_childs[n]] = right_vars[n] / right_hists[n].count;
 
-                node_counts[left_childs[n]] = left_counts[n];
-                node_counts[mid_childs[n]] = mid_counts[n];
-                node_counts[right_childs[n]] = right_counts[n];
-
-                node_sums[left_childs[n]] = left_sums[n];
-                node_sums[mid_childs[n]] = mid_sums[n];
-                node_sums[right_childs[n]] = right_sums[n];
-
-                node_sum_sqs[left_childs[n]] = left_sum_sqs[n];
-                node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
-                node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
+                node_hists[left_childs[n]] = left_hists[n];
+                node_hists[mid_childs[n]] = mid_hists[n];
+                node_hists[right_childs[n]] = right_hists[n];
 
                 new_node_count += 3;
             } else if (should_split[n]) {
@@ -424,13 +391,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             uint16_t mid = mid_childs[n];
             uint16_t right = right_childs[n];
 
-            memberships[left] = calloc(node_counts[left], sizeof(uint64_t));
-            if (node_counts[mid] > 0) {
-                memberships[mid] = calloc(node_counts[mid], sizeof(uint64_t));
+            memberships[left] = calloc(node_hists[left].count, sizeof(uint64_t));
+            if (node_hists[mid].count > 0) {
+                memberships[mid] = calloc(node_hists[mid].count, sizeof(uint64_t));
             }
-            memberships[right] = calloc(node_counts[right], sizeof(uint64_t));
+            memberships[right] = calloc(node_hists[right].count, sizeof(uint64_t));
 
-            for (uint64_t i = 0; i < node_counts[n]; i++) {
+            for (uint64_t i = 0; i < node_hists[n].count; i++) {
                 uint64_t r = memberships[n][i];
                 uint8_t v = X[split_col[n]*rows + r];
 
@@ -463,10 +430,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
         // write predictions for non-empty leaves only
-        if (!node_counts[n] || left_childs[n]) continue;
+        if (!node_hists[n].count || left_childs[n]) continue;
 
-        double mean = node_sums[n] / node_counts[n];
-        for (uint64_t i = 0; i < node_counts[n]; i++) {
+        double mean = node_hists[n].sum / node_hists[n].count;
+        for (uint64_t i = 0; i < node_hists[n].count; i++) {
             uint64_t r = memberships[n][i];
             preds[r] = mean;
         }
@@ -480,9 +447,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         omp_destroy_lock(&node_locks[n]);
     }
 
-    free(saved_counts);
-    free(saved_sums);
-    free(saved_sum_sqs);
+    free(col_node_hists);
     Py_DECREF(X_obj);
     Py_DECREF(y_obj);
     Py_DECREF(split_col_obj);
@@ -496,7 +461,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     gettimeofday(&total_end, NULL);
 #if VERBOSE
-    printf("Fit depth %d / %d nodes: %.1f total, %.1f init, %.1f stats, %.1f splits, %.1f post\n",
+    printf("Fit depth %d / %d nodes: %.1f total, %.1f init, %.1f hists, %.1f splits, %.1f post\n",
         depth,
         node_count,
         ((float) msec(total_start, total_end)) / 1000.0,
