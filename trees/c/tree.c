@@ -5,7 +5,6 @@
 #include <arrayobject.h>
 #include <stdbool.h>
 #include <float.h>
-// #include <time.h>
 #include <sys/time.h>
 #include <omp.h>
 
@@ -25,7 +24,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
@@ -125,10 +124,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
 
     // for each node n, an array of length node_counts[n] containing the rows in n
-    uint64_t * __restrict memberships [max_nodes];
+    uint32_t * __restrict memberships [max_nodes];
 
     // [col, node, v] => stat
-    uint64_t * __restrict counts = calloc(cols * max_nodes * vals, sizeof(uint64_t));
+    uint32_t * __restrict counts = calloc(cols * max_nodes * vals, sizeof(uint32_t));
     double * __restrict sums = calloc(cols * max_nodes * vals, sizeof(double));
     double * __restrict sum_sqs = calloc(cols * max_nodes * vals, sizeof(double));
 
@@ -136,7 +135,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t done_count = 0;
 
     double   node_scores  [max_nodes];
-    uint64_t node_counts  [max_nodes];
+    uint32_t node_counts  [max_nodes];
     double   node_sums    [max_nodes];
     double   node_sum_sqs [max_nodes];
     uint16_t node_parents [max_nodes];
@@ -144,9 +143,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     bool     should_subtract [max_nodes];
     omp_lock_t node_locks [max_nodes];
 
-    uint64_t left_counts [max_nodes];
-    uint64_t mid_counts  [max_nodes];
-    uint64_t right_counts[max_nodes];
+    uint32_t left_counts [max_nodes];
+    uint32_t mid_counts  [max_nodes];
+    uint32_t right_counts[max_nodes];
 
     double left_sums [max_nodes];
     double mid_sums  [max_nodes];
@@ -175,13 +174,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         memberships[n] = NULL;
     }
 
-    memberships[0] = calloc(rows, sizeof(uint64_t));
+    memberships[0] = calloc(rows, sizeof(uint32_t));
 
     // find the baseline of the root
     // accumulate in local variables so clang vectorizes
     double root_sum = 0.0;
     double root_sum_sq = 0.0;
-    for (uint64_t r = 0; r < rows; r++) {
+    for (uint32_t r = 0; r < rows; r++) {
         root_sum += y[r];
         root_sum_sq += y[r] * y[r];
         memberships[0][r] = r;
@@ -201,7 +200,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         // build histograms for this entire level, feature-parallel
         #pragma omp parallel for
-        for (uint64_t c = 0; c < cols; c++) {
+        for (uint32_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
                 if (node_counts[n] == 0) continue;
 
@@ -210,31 +209,22 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     // derive from (parents - siblings)
                     // this requires that we've already calculated the siblings
                     // so the siblings must be at n-1 and n-2
-                    uint16_t parent = node_parents[n];
-                    uint16_t bro = n-1;
-                    uint16_t sis = n-2;
-
                     for (uint v = 0; v < vals; v++) {
                         uint64_t i = c*max_nodes*vals + n*vals + v;
+                        uint64_t parent_i = c*max_nodes*vals + node_parents[n]*vals + v;
+                        uint64_t bro_i = c*max_nodes*vals + (n-1)*vals + v;
+                        uint64_t sis_i = c*max_nodes*vals + (n-2)*vals + v;
 
-                        counts[i] = counts[c*max_nodes*vals + parent*vals + v]
-                                  - counts[c*max_nodes*vals + bro*vals + v]
-                                  - counts[c*max_nodes*vals + sis*vals + v];
-
-                        sums[i] = sums[c*max_nodes*vals + parent*vals + v]
-                                  - sums[c*max_nodes*vals + bro*vals + v]
-                                  - sums[c*max_nodes*vals + sis*vals + v];
-
-                        sum_sqs[i] = sum_sqs[c*max_nodes*vals + parent*vals + v]
-                                  - sum_sqs[c*max_nodes*vals + bro*vals + v]
-                                  - sum_sqs[c*max_nodes*vals + sis*vals + v];
+                        counts[i]  = counts[parent_i]  - counts[bro_i]  - counts[sis_i];
+                        sums[i]    = sums[parent_i]    - sums[bro_i]    - sums[sis_i];
+                        sum_sqs[i] = sum_sqs[parent_i] - sum_sqs[bro_i] - sum_sqs[sis_i];
                     }
                 } else {
                     // build histograms
                     // i.e. sum the stats for each value of X in this node
 
                     // aggregate in thread-local variables for efficiency
-                    uint64_t local_counts [vals];
+                    uint32_t local_counts [vals];
                     double local_sums [vals];
                     double local_sum_sqs [vals];
                     for (uint v = 0; v < vals; v++) {
@@ -243,9 +233,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         local_sum_sqs[v] = 0.0;
                     }
                     // the bottleneck: sum up stats for each row in this node
-                    for (uint64_t i = 0; i < node_counts[n]; i++) {
-                        uint64_t r = memberships[n][i];
-                        uint32_t v = X[c*rows + r];
+                    for (uint32_t i = 0; i < node_counts[n]; i++) {
+                        uint32_t r = memberships[n][i];
+                        uint8_t v = X[c*rows + r];
                         local_counts[v]++;
                         local_sums[v] += y[r];
                         local_sum_sqs[v] += y[r] * y[r];
@@ -266,16 +256,16 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // choose splits for all nodes on this level, node-parallel
         #pragma omp parallel for
         for (uint16_t n = done_count; n < node_count; n++) {
-            for (uint64_t c = 0; c < cols; c++) {
+            for (uint32_t c = 0; c < cols; c++) {
                 // min leaf size is 1 for left & right, 0 for mid
                 if (node_counts[n] < 2) continue;
 
                 // evaluate each possible splitting point
                 // running sums from the left side
-                uint64_t left_count = 0;
+                uint32_t left_count = 0;
                 double left_sum = 0.0;
                 double left_sum_sq = 0.0;
-                for (uint64_t lo = 0; lo < vals - 2; lo++) {
+                for (uint lo = 0; lo < vals - 2; lo++) {
                     uint64_t lo_i = c*max_nodes*vals + n*vals + lo;
 
                     // force non-empty left split
@@ -291,7 +281,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     double mid_sum_sq = 0.0;
 
                     // allow mid split to be empty in the hi == lo case ONLY
-                    for (uint64_t hi = lo; hi < vals - 1; hi++) {
+                    for (uint hi = lo; hi < vals - 1; hi++) {
                         uint64_t hi_i = c*max_nodes*vals + n*vals + hi;
                         double split_penalty;
 
@@ -311,7 +301,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             split_penalty = penalty;
                         }
 
-                        uint64_t right_count = node_counts[n] - left_count - mid_count;
+                        uint32_t right_count = node_counts[n] - left_count - mid_count;
                         double right_sum = node_sums[n] - left_sum - mid_sum;
                         double right_sum_sq = node_sum_sqs[n] - left_sum_sq - mid_sum_sq;
 
@@ -416,22 +406,22 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = done_count; n < node_count; n++) {
             if (!should_split[n]) continue;
 
-            uint64_t left_i = 0;
-            uint64_t mid_i = 0;
-            uint64_t right_i = 0;
+            uint32_t left_i = 0;
+            uint32_t mid_i = 0;
+            uint32_t right_i = 0;
 
             uint16_t left = left_childs[n];
             uint16_t mid = mid_childs[n];
             uint16_t right = right_childs[n];
 
-            memberships[left] = calloc(node_counts[left], sizeof(uint64_t));
+            memberships[left] = calloc(node_counts[left], sizeof(uint32_t));
             if (node_counts[mid] > 0) {
-                memberships[mid] = calloc(node_counts[mid], sizeof(uint64_t));
+                memberships[mid] = calloc(node_counts[mid], sizeof(uint32_t));
             }
-            memberships[right] = calloc(node_counts[right], sizeof(uint64_t));
+            memberships[right] = calloc(node_counts[right], sizeof(uint32_t));
 
-            for (uint64_t i = 0; i < node_counts[n]; i++) {
-                uint64_t r = memberships[n][i];
+            for (uint32_t i = 0; i < node_counts[n]; i++) {
+                uint32_t r = memberships[n][i];
                 uint8_t v = X[split_col[n]*rows + r];
 
                 if (v <= split_lo[n]) {
@@ -466,8 +456,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         if (!node_counts[n] || left_childs[n]) continue;
 
         double mean = node_sums[n] / node_counts[n];
-        for (uint64_t i = 0; i < node_counts[n]; i++) {
-            uint64_t r = memberships[n][i];
+        for (uint32_t i = 0; i < node_counts[n]; i++) {
+            uint32_t r = memberships[n][i];
             preds[r] = mean;
         }
         node_means[n] = mean;

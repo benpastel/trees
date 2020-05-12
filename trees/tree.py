@@ -31,12 +31,15 @@ def fit_tree(
   assert bins.dtype == np.float32
   assert 0 <= params.smooth_factor
   assert 0 <= params.third_split_penalty
-  assert 2 <= params.bucket_count <= 256
+  assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
+  assert 0 < rows < 2**32-1, 'rows must fit in uint32'
+  assert 0 < feats < 2**32-1, 'feats must fit in uint32'
 
   # check if depth constraint imposes a tighter max_nodes
   max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
   max_nodes = min(params.max_nodes, max_nodes_from_depth)
-  assert 0 < max_nodes < 2**16
+  assert 0 < max_nodes < 2**16, 'max_nodes must fit in uint16'
+  assert 0 < feats * max_nodes * params.bucket_count < 2**64-1, 'histograms indices must fit in uint64'
 
   # output arrays for c function
   # pre-allocated to the max number of nodes
