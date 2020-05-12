@@ -233,11 +233,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     uint16_t parent = (uint16_t) derive_stats_from[n];
                     uint16_t bro = n-1;
                     uint16_t sis = n-2;
-                    // if (parent < 0 || bro < 0 || sis < 0) {
-                    //     printf("bad node idx\n");
-                    //     fflush(stdout);
-                    //     return NULL;
-                    // }
 
                     for (uint v = 0; v < vals; v++) {
 
@@ -245,19 +240,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                   - saved_counts[c*max_nodes*vals + bro*vals + v]
                                   - saved_counts[c*max_nodes*vals + sis*vals + v];
 
-                        // if (counts[v]) {
-                        //     printf("n=%d c=%d v=%d: parent %llu - bro %llu - sis %llu = counts[v] %llu\n",
-                        //         n, c, v,
-                        //         saved_counts[c*max_nodes*vals + parent*vals + v],
-                        //         saved_counts[c*max_nodes*vals + bro*vals + v],
-                        //         saved_counts[c*max_nodes*vals + sis*vals + v],
-                        //         counts[v]);
-                        //     printf("node_counts[n]=%llu, node_counts[parent]=%llu\n", node_counts[n], node_counts[parent]);
-                        // }
-
                         sums[v] = saved_sums[c*max_nodes*vals + parent*vals + v]
                                   - saved_sums[c*max_nodes*vals + bro*vals + v]
                                   - saved_sums[c*max_nodes*vals + sis*vals + v];
+
                         sum_sqs[v] = saved_sum_sqs[c*max_nodes*vals + parent*vals + v]
                                   - saved_sum_sqs[c*max_nodes*vals + bro*vals + v]
                                   - saved_sum_sqs[c*max_nodes*vals + sis*vals + v];
@@ -415,13 +401,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
                 node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
 
-                // printf("  %d [%llu] => (%d [%llu], %d [%llu], %d [%llu])\n",
-                //     n, node_counts[n],
-                //     left_childs[n], node_counts[left_childs[n]],
-                //     mid_childs[n], node_counts[mid_childs[n]],
-                //     right_childs[n], node_counts[right_childs[n]]);
-                // fflush(stdout);
-
                 new_node_count += 3;
             } else if (should_split[n]) {
                 // no room; abort the split
@@ -460,12 +439,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     memberships[right][right_i++] = r;
                 }
             }
-            // TODO can update node_means and de-alloc parent now?
-            //
-            // if (left_i != node_counts[left] || mid_i != node_counts[mid] || right_i != node_counts[right]) {
-            //     printf("bad memberships: %llu, %llu, %llu\n", left_i, mid_i, right_i);
-            //     return NULL;
-            // }
+            // done with the parent now
+            free(memberships[n]);
+            memberships[n] = NULL;
         }
 
         done_count = node_count;
@@ -481,9 +457,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     gettimeofday(&post_start, NULL);
 
     // calculate the mean at each leaf node & predictions
-    // TODO this is only accidentally correct; overwriting internal preds with leaf preds
-    // only keep the leaf memberships around
-    //
     #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
         // write predictions for non-empty leaves only
@@ -495,11 +468,13 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             preds[r] = mean;
         }
         node_means[n] = mean;
+
+        free(memberships[n]);
+        memberships[n] = NULL;
     }
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         omp_destroy_lock(&node_locks[n]);
-        free(memberships[n]);
     }
 
     free(saved_counts);
