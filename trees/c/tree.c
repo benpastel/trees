@@ -138,13 +138,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint64_t node_counts  [max_nodes];
     double   node_sums    [max_nodes];
     double   node_sum_sqs [max_nodes];
+    uint16_t node_parents [max_nodes];
     bool     should_split [max_nodes];
+    bool     should_subtract [max_nodes];
     omp_lock_t node_locks [max_nodes];
-
-    // parent or -1
-    // siblings are always n-1 and n-2
-    // TODO this is hackyyyyy
-    int derive_stats_from [max_nodes];
 
     uint64_t left_counts [max_nodes];
     uint64_t mid_counts  [max_nodes];
@@ -167,14 +164,14 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         node_counts[n] = 0;
         node_sums[n] = 0.0;
         node_sum_sqs[n] = 0.0;
+        node_parents[n] = 0;
         should_split[n] = false;
+        should_subtract[n] = false;
         left_counts[n] = 0;
         mid_counts[n] = 0;
         right_counts[n] = 0;
         omp_init_lock(&node_locks[n]);
         memberships[n] = NULL;
-
-        derive_stats_from[n] = -1;
     }
 
     memberships[0] = calloc(rows, sizeof(uint64_t));
@@ -214,23 +211,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 double sums [vals];
                 double sum_sqs [vals];
 
-                if (derive_stats_from[n] == -1) {
-                    // calc stats
-                    for (uint v = 0; v < vals; v++) {
-                        counts[v] = 0;
-                        sums[v] = 0.0;
-                        sum_sqs[v] = 0.0;
-                    }
-                    for (uint64_t i = 0; i < node_counts[n]; i++) {
-                        uint64_t r = memberships[n][i];
-                        uint32_t v = X[c*rows + r];
-                        counts[v]++;
-                        sums[v] += y[r];
-                        sum_sqs[v] += y[r] * y[r];
-                    }
-                } else {
-                    // derive stats
-                    uint16_t parent = (uint16_t) derive_stats_from[n];
+                if (should_subtract[n]) {
+                    // instead of summing stats from data,
+                    // derive from (parents - siblings)
+                    // this requires that we've already calculated the siblings
+                    // so the siblings must be at n-1 and n-2
+                    uint16_t parent = node_parents[n];
                     uint16_t bro = n-1;
                     uint16_t sis = n-2;
 
@@ -248,7 +234,24 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                                   - saved_sum_sqs[c*max_nodes*vals + bro*vals + v]
                                   - saved_sum_sqs[c*max_nodes*vals + sis*vals + v];
                     }
+                } else {
+                    // build histograms
+                    // i.e. sum the stats for each value of X in this node
+
+                    for (uint v = 0; v < vals; v++) {
+                        counts[v] = 0;
+                        sums[v] = 0.0;
+                        sum_sqs[v] = 0.0;
+                    }
+                    for (uint64_t i = 0; i < node_counts[n]; i++) {
+                        uint64_t r = memberships[n][i];
+                        uint32_t v = X[c*rows + r];
+                        counts[v]++;
+                        sums[v] += y[r];
+                        sum_sqs[v] += y[r] * y[r];
+                    }
                 }
+
                 // either way, save these so we can derive future stats
                 for (uint v = 0; v < vals; v++) {
                     saved_counts[c*max_nodes*vals + n*vals + v] = counts[v];
@@ -259,21 +262,19 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 // min leaf size is 1 for left & right, 0 for mid
                 if (node_counts[n] < 2) continue;
 
-
                 // evaluate each possible splitting point
                 // running sums from the left side
                 uint64_t left_count = 0;
                 double left_sum = 0.0;
                 double left_sum_sq = 0.0;
                 for (uint64_t lo = 0; lo < vals - 2; lo++) {
-                    uint64_t lo_i = lo; // TODO
 
                     // force non-empty left split
-                    if (counts[lo_i] == 0) continue;
+                    if (counts[lo] == 0) continue;
 
-                    left_count += counts[lo_i];
-                    left_sum += sums[lo_i];
-                    left_sum_sq += sum_sqs[lo_i];
+                    left_count += counts[lo];
+                    left_sum += sums[lo];
+                    left_sum_sq += sum_sqs[lo];
                     double left_var = left_sum_sq - (left_sum * left_sum / left_count);
 
                     uint64_t mid_count = 0;
@@ -282,11 +283,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
                     // allow mid split to be empty in the hi == lo case ONLY
                     for (uint64_t hi = lo; hi < vals - 1; hi++) {
-                        uint64_t hi_i = hi; // TODO
-
                         double split_penalty;
 
-                        if (hi > lo && !counts[hi_i]) {
+                        if (hi > lo && !counts[hi]) {
                             // this value doesn't change the split stats
                             continue;
                         } else if (hi > lo) {
@@ -294,9 +293,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                             // penalize it by a factor
                             split_penalty = penalty + third_split_penalty * penalty;
 
-                            mid_count += counts[hi_i];
-                            mid_sum += sums[hi_i];
-                            mid_sum_sq += sum_sqs[hi_i];
+                            mid_count += counts[hi];
+                            mid_sum += sums[hi];
+                            mid_sum_sq += sum_sqs[hi];
                         } else {
                             // middle split is empty
                             split_penalty = penalty;
@@ -364,26 +363,30 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = 0; n < node_count; n++) {
             if (should_split[n] && new_node_count <= max_nodes - 3) {
 
-                // largest sibling is going to have derived stats
-                // so it must have the highest ID to be processed last
-                // (the order of the other 2 doesn't matter)
-                // TODO less hacky
+                // child with the most data is going to derive stats by subtraction
+                // so it must go last
                 if (left_counts[n] > mid_counts[n] && left_counts[n] > right_counts[n]) {
+                    // left last
                     mid_childs[n] = new_node_count + 0;
                     right_childs[n] = new_node_count + 1;
                     left_childs[n] = new_node_count + 2;
-                    derive_stats_from[left_childs[n]] = n;
+                    should_subtract[left_childs[n]] = true;
                 } else if (mid_counts[n] > right_counts[n]) {
+                    // mid last
                     left_childs[n] = new_node_count + 0;
                     right_childs[n] = new_node_count + 1;
                     mid_childs[n] = new_node_count + 2;
-                    derive_stats_from[mid_childs[n]] = n;
+                    should_subtract[mid_childs[n]] = true;
                 } else {
+                    // right last
                     left_childs[n] = new_node_count + 0;
                     mid_childs[n] = new_node_count + 1;
                     right_childs[n] = new_node_count + 2;
-                    derive_stats_from[right_childs[n]] = n;
+                    should_subtract[right_childs[n]] = true;
                 }
+                node_parents[left_childs[n]] = n;
+                node_parents[mid_childs[n]] = n;
+                node_parents[right_childs[n]] = n;
 
                 node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
                 node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
