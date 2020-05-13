@@ -141,7 +141,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     uint16_t node_parents [max_nodes];
     bool     should_split [max_nodes];
     bool     should_subtract [max_nodes];
-    omp_lock_t node_locks [max_nodes];
 
     uint32_t left_counts [max_nodes];
     uint32_t mid_counts  [max_nodes];
@@ -170,7 +169,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         left_counts[n] = 0;
         mid_counts[n] = 0;
         right_counts[n] = 0;
-        omp_init_lock(&node_locks[n]);
         memberships[n] = NULL;
     }
 
@@ -464,10 +462,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         free(memberships[n]);
         memberships[n] = NULL;
-    }
-
-    for (uint16_t n = 0; n < max_nodes; n++) {
-        omp_destroy_lock(&node_locks[n]);
     }
 
     free(counts);
