@@ -200,50 +200,55 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         #pragma omp parallel for
         for (uint32_t c = 0; c < cols; c++) {
             for (uint16_t n = done_count; n < node_count; n++) {
-                if (node_counts[n] == 0) continue;
+                if (node_counts[n] == 0 || should_subtract[n]) continue;
 
-                if (should_subtract[n]) {
-                    // instead of summing stats from data,
-                    // derive from (parents - siblings)
-                    // this requires that we've already calculated the siblings
-                    // so the siblings must be at n-1 and n-2
-                    for (uint v = 0; v < vals; v++) {
-                        uint64_t i = c*max_nodes*vals + n*vals + v;
-                        uint64_t parent_i = c*max_nodes*vals + node_parents[n]*vals + v;
-                        uint64_t bro_i = c*max_nodes*vals + (n-1)*vals + v;
-                        uint64_t sis_i = c*max_nodes*vals + (n-2)*vals + v;
+                // build histograms
+                // i.e. sum the stats for each value of X in this node
 
-                        counts[i]  = counts[parent_i]  - counts[bro_i]  - counts[sis_i];
-                        sums[i]    = sums[parent_i]    - sums[bro_i]    - sums[sis_i];
-                        sum_sqs[i] = sum_sqs[parent_i] - sum_sqs[bro_i] - sum_sqs[sis_i];
-                    }
-                } else {
-                    // build histograms
-                    // i.e. sum the stats for each value of X in this node
+                // aggregate in thread-local variables for efficiency
+                uint32_t local_counts [vals];
+                double local_sums [vals];
+                double local_sum_sqs [vals];
+                for (uint v = 0; v < vals; v++) {
+                    local_counts[v] = 0;
+                    local_sums[v] = 0.0;
+                    local_sum_sqs[v] = 0.0;
+                }
+                // the bottleneck: sum up stats for each row in this node
+                for (uint32_t i = 0; i < node_counts[n]; i++) {
+                    uint32_t r = memberships[n][i];
+                    uint8_t v = X[c*rows + r];
+                    local_counts[v]++;
+                    local_sums[v] += y[r];
+                    local_sum_sqs[v] += y[r] * y[r];
+                }
+                // now save into the larger [col, node, value] arrays
+                for (uint v = 0; v < vals; v++) {
+                    counts[c*max_nodes*vals + n*vals + v] = local_counts[v];
+                    sums[c*max_nodes*vals + n*vals + v] = local_sums[v];
+                    sum_sqs[c*max_nodes*vals + n*vals + v] = local_sum_sqs[v];
+                }
+            }
+        }
 
-                    // aggregate in thread-local variables for efficiency
-                    uint32_t local_counts [vals];
-                    double local_sums [vals];
-                    double local_sum_sqs [vals];
-                    for (uint v = 0; v < vals; v++) {
-                        local_counts[v] = 0;
-                        local_sums[v] = 0.0;
-                        local_sum_sqs[v] = 0.0;
-                    }
-                    // the bottleneck: sum up stats for each row in this node
-                    for (uint32_t i = 0; i < node_counts[n]; i++) {
-                        uint32_t r = memberships[n][i];
-                        uint8_t v = X[c*rows + r];
-                        local_counts[v]++;
-                        local_sums[v] += y[r];
-                        local_sum_sqs[v] += y[r] * y[r];
-                    }
-                    // now save into the larger [col, node, value] arrays
-                    for (uint v = 0; v < vals; v++) {
-                        counts[c*max_nodes*vals + n*vals + v] = local_counts[v];
-                        sums[c*max_nodes*vals + n*vals + v] = local_sums[v];
-                        sum_sqs[c*max_nodes*vals + n*vals + v] = local_sum_sqs[v];
-                    }
+        // instead of summing stats from data,
+        // derive from (parents - siblings)
+        // this requires that we've already calculated the siblings
+        // so the siblings must be at n-1 and n-2
+        // TODO assumption no longer required
+        #pragma omp parallel for
+        for (uint16_t n = done_count; n < node_count; n++) {
+            if (node_counts[n] == 0 || !should_subtract[n]) continue;
+            for (uint32_t c = 0; c < cols; c++) {
+                for (uint v = 0; v < vals; v++) {
+                    uint64_t i = c*max_nodes*vals + n*vals + v;
+                    uint64_t parent_i = c*max_nodes*vals + node_parents[n]*vals + v;
+                    uint64_t bro_i = c*max_nodes*vals + (n-1)*vals + v;
+                    uint64_t sis_i = c*max_nodes*vals + (n-2)*vals + v;
+
+                    counts[i]  = counts[parent_i]  - counts[bro_i]  - counts[sis_i];
+                    sums[i]    = sums[parent_i]    - sums[bro_i]    - sums[sis_i];
+                    sum_sqs[i] = sum_sqs[parent_i] - sum_sqs[bro_i] - sum_sqs[sis_i];
                 }
             }
         }
