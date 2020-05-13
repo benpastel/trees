@@ -26,6 +26,9 @@ static float msec(struct timeval t0, struct timeval t1)
 
 #define VERBOSE 1
 
+#define SPLIT_BUF_SIZE 1024
+#define MIN_PARALLEL_SPLIT 1024
+
 static PyObject* build_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg, *y_arg;
@@ -396,7 +399,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             node_count += 3;
 
             // update memberships
-            // ... we lost parallelization here
             uint32_t left_i = 0;
             uint32_t mid_i = 0;
             uint32_t right_i = 0;
@@ -411,19 +413,110 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             }
             memberships[right] = calloc(node_counts[right], sizeof(uint32_t));
 
-            // TODO can we pin split_col[n] on a core?
-            for (uint32_t i = 0; i < node_counts[n]; i++) {
-                uint32_t r = memberships[n][i];
-                uint8_t v = X[split_col[n]*rows + r];
 
-                if (v <= split_lo[n]) {
-                    memberships[left][left_i++] = r;
-                } else if (v <= split_hi[n]) {
-                    memberships[mid][mid_i++] = r;
-                } else {
-                    memberships[right][right_i++] = r;
+            if (node_counts[n] < MIN_PARALLEL_SPLIT) {
+                // single-threaded
+                for (uint32_t i = 0; i < node_counts[n]; i++) {
+                    uint32_t r = memberships[n][i];
+                    uint8_t v = X[split_col[n]*rows + r];
+
+                    if (v <= split_lo[n]) {
+                        memberships[left][left_i++] = r;
+                    } else if (v <= split_hi[n]) {
+                        memberships[mid][mid_i++] = r;
+                    } else {
+                        memberships[right][right_i++] = r;
+                    }
+                }
+            } else {
+                // multi-threaded
+                //
+                // the order of rows doesn't matter
+                //
+                // aggregate a buffer within each thread
+                // once full, copy it into memberships
+                #pragma omp parallel
+                {
+                    uint32_t left_buf [SPLIT_BUF_SIZE];
+                    uint32_t mid_buf  [SPLIT_BUF_SIZE];
+                    uint32_t right_buf [SPLIT_BUF_SIZE];
+
+                    uint32_t local_left_i = 0;
+                    uint32_t local_mid_i = 0;
+                    uint32_t local_right_i = 0;
+
+                    uint32_t copy_start;
+
+                    #pragma omp for
+                    for (uint32_t i = 0; i < node_counts[n]; i++) {
+                        uint32_t r = memberships[n][i];
+                        uint8_t v = X[split_col[n]*rows + r];
+
+                        if (v <= split_lo[n]) {
+                            left_buf[local_left_i++] = r;
+                        } else if (v <= split_hi[n]) {
+                            mid_buf[local_mid_i++] = r;
+                        } else {
+                            right_buf[local_right_i++] = r;
+                        }
+
+                        if (local_left_i == SPLIT_BUF_SIZE) {
+                            #pragma omp critical
+                            {
+                                copy_start = left_i;
+                                left_i = copy_start + SPLIT_BUF_SIZE;
+                            }
+                            memcpy(memberships[left] + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                            local_left_i = 0;
+                        }
+                        if (local_mid_i == SPLIT_BUF_SIZE) {
+                            #pragma omp critical
+                            {
+                                copy_start = mid_i;
+                                mid_i = copy_start + SPLIT_BUF_SIZE;
+                            }
+                            memcpy(memberships[mid] + copy_start, mid_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                            local_mid_i = 0;
+                        }
+                        if (local_right_i == SPLIT_BUF_SIZE) {
+                            #pragma omp critical
+                            {
+                                copy_start = right_i;
+                                right_i = copy_start + SPLIT_BUF_SIZE;
+                            }
+                            memcpy(memberships[right] + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                            local_right_i = 0;
+                        }
+                    }
+                    // copy anything leftover in the buffers
+                    if (local_left_i > 0) {
+                        #pragma omp critical
+                        {
+                            copy_start = left_i;
+                            left_i = copy_start + local_left_i;
+                        }
+                        memcpy(memberships[left] + copy_start, left_buf, local_left_i * sizeof(uint32_t));
+                    }
+                    if (local_mid_i > 0) {
+                        #pragma omp critical
+                        {
+                            copy_start = mid_i;
+                            mid_i = copy_start + local_mid_i;
+                        }
+                        memcpy(memberships[mid] + copy_start, mid_buf, local_mid_i * sizeof(uint32_t));
+
+                    }
+                    if (local_right_i > 0) {
+                        #pragma omp critical
+                        {
+                            copy_start = right_i;
+                            right_i = copy_start + local_right_i;
+                        }
+                        memcpy(memberships[right] + copy_start, right_buf, local_right_i * sizeof(uint32_t));
+                    }
                 }
             }
+
             free(memberships[n]);
             memberships[n] = NULL;
         }
