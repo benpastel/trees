@@ -197,10 +197,11 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         gettimeofday(&stat_start, NULL);
 
         // build histograms for this entire level, feature-parallel
-        #pragma omp parallel for
-        for (uint32_t c = 0; c < cols; c++) {
-            for (uint16_t n = done_count; n < node_count; n++) {
-                if (node_counts[n] == 0 || should_subtract[n]) continue;
+        for (uint16_t n = done_count; n < node_count; n++) {
+            if (node_counts[n] == 0 || should_subtract[n]) continue;
+
+            #pragma omp parallel for
+            for (uint32_t c = 0; c < cols; c++) {
 
                 // build histograms
                 // i.e. sum the stats for each value of X in this node
