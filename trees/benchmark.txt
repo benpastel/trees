@@ -1,0 +1,118 @@
+TREE_COUNT=100
+
+
+M5:
+
+loading from cache
+X.shape: train (37734424, 19), valid (9433606, 19)
+regression targets with min=0.0, max=763.0, mean=1.2
+train our tree with Params(smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=1)...
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 2.3 total, 0.1 init, 1.5 stats, 0.0 choose splits, 0.6 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 2.0 total, 0.0 init, 1.4 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 2.2 total, 0.0 init, 1.5 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 2.0 total, 0.0 init, 1.4 stats, 0.0 choose splits, 0.4 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 2.0 total, 0.0 init, 1.3 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3280 nodes: 1.7 total, 0.0 init, 1.1 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3046 nodes: 1.7 total, 0.0 init, 1.2 stats, 0.0 choose splits, 0.4 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 3142 nodes: 1.7 total, 0.0 init, 1.0 stats, 0.0 choose splits, 0.6 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 2344 nodes: 1.5 total, 0.0 init, 0.9 stats, 0.0 choose splits, 0.4 make splits, 0.1 post
+apply bins: 0.5 (0.5 loop)
+Fit depth 9 / 2119 nodes: 1.4 total, 0.0 init, 0.8 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.5 (0.5 loop)
+Fit depth 9 / 2485 nodes: 1.5 total, 0.0 init, 0.7 stats, 0.0 choose splits, 0.7 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 2014 nodes: 1.3 total, 0.0 init, 0.7 stats, 0.0 choose splits, 0.5 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 1441 nodes: 1.3 total, 0.0 init, 0.6 stats, 0.0 choose splits, 0.7 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 1279 nodes: 1.2 total, 0.0 init, 0.5 stats, 0.0 choose splits, 0.5 make splits, 0.0 post
+apply bins: 0.5 (0.5 loop)
+Fit depth 9 / 1126 nodes: 1.2 total, 0.0 init, 0.5 stats, 0.0 choose splits, 0.6 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 1501 nodes: 1.2 total, 0.0 init, 0.4 stats, 0.0 choose splits, 0.7 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 649 nodes: 1.1 total, 0.0 init, 0.4 stats, 0.0 choose splits, 0.6 make splits, 0.1 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 667 nodes: 1.0 total, 0.0 init, 0.3 stats, 0.0 choose splits, 0.6 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 676 nodes: 1.0 total, 0.0 init, 0.4 stats, 0.0 choose splits, 0.5 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 757 nodes: 1.0 total, 0.0 init, 0.2 stats, 0.0 choose splits, 0.6 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 535 nodes: 0.8 total, 0.0 init, 0.3 stats, 0.0 choose splits, 0.3 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 556 nodes: 0.9 total, 0.0 init, 0.3 stats, 0.0 choose splits, 0.5 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 2 / 1 nodes: 0.3 total, 0.0 init, 0.3 stats, 0.0 choose splits, 0.0 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 9 / 667 nodes: 1.0 total, 0.0 init, 0.2 stats, 0.0 choose splits, 0.6 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 2 / 1 nodes: 0.4 total, 0.0 init, 0.3 stats, 0.0 choose splits, 0.0 make splits, 0.0 post
+apply bins: 0.6 (0.6 loop)
+Fit depth 2 / 1 nodes: 0.3 total, 0.0 init, 0.2 stats, 0.0 choose splits, 0.0 make splits, 0.0 post
+(71.0s)
+Regression model with 25 trees with sizes min=1 max=3280 mean=1787.44
+predict our tree...
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.1 (0.1 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+  eval: 0.0 (0.0 loop)
+(7.9s)
+
+      train: MSE: 3.81, MAE: 0.82
+      valid: MSE: 4.48, MAE: 0.83
