@@ -33,7 +33,7 @@ def test_fit_tree():
   ])
 
   tree, preds = fit_tree(
-    X.T,
+    X,
     y,
     bins,
     Params(smooth_factor=1.0, third_split_penalty=0.0, bucket_count=256)
@@ -60,7 +60,7 @@ def test_fit_tree():
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
-    X.T,
+    X,
     y,
     bins,
     Params(smooth_factor=1.0, third_split_penalty=0.01, bucket_count=256)
@@ -86,7 +86,7 @@ def test_fit_tree():
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
-    X.T,
+    X,
     y,
     bins,
     Params(smooth_factor=1.0, third_split_penalty=10.0, bucket_count=256)
@@ -116,7 +116,7 @@ def test_fit_tree():
   y = np.array([9, 2, 7, 0, 2, 20, 3, 20, 20], dtype=np.double)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
-    X.T,
+    X,
     y,
     bins,
     Params(smooth_factor=0.0, bucket_count=256)

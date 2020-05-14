@@ -82,24 +82,24 @@ def choose_bins(
 
 
 def apply_bins(
-  XT: np.ndarray,
+  X: np.ndarray,
   bins: np.ndarray
 ) -> np.ndarray:
   ''' returns X bucketed into the splits '''
-  cols, rows = XT.shape
+  rows, cols = X.shape
   splits = bins.shape[1]
   assert bins.ndim == 2
   assert bins.shape[0] == cols
-  assert XT.dtype == np.float32
+  assert X.dtype == np.float32
   assert bins.dtype == np.float32
 
-  binned_XT = np.zeros((cols, rows), dtype=np.uint8)
+  bin_X = np.zeros((rows, cols), dtype=np.uint8)
 
-  c_apply_bins(XT, bins, binned_XT)
+  c_apply_bins(X, bins, bin_X)
 
-  assert np.all(binned_XT < splits+1)
+  assert np.all(bin_X < splits+1), f'{np.max(bin_X)=}, {splits+1=}'
 
-  return binned_XT
+  return bin_X
 
 
 def fit(
@@ -115,7 +115,6 @@ def fit(
   targets_are_float = (y.dtype != np.bool)
 
   X = X.astype(np.float32, copy=False)
-  XT = X.T.copy()
   y = y.astype(np.double, copy=False)
   mean_y = np.mean(y)
   preds = np.full(rows, mean_y, dtype=np.double)
@@ -127,11 +126,11 @@ def fit(
   for t in range(params.tree_count):
     if (t % params.trees_per_bucketing) == 0:
       bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
-      bin_XT = apply_bins(XT, bins)
+      bin_X = apply_bins(X, bins)
 
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(bin_XT, target, bins, params)
+    tree, new_preds = fit_tree(bin_X, target, bins, params)
 
     if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
       # 2 trees with 1 node in a row

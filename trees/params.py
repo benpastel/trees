@@ -11,5 +11,5 @@ class Params:
   third_split_penalty: float = 4.0
   bucket_count: int = 64
   bucket_sample_count: int = 10000
-  trees_per_bucketing: int = 1
+  trees_per_bucketing: int = 2
 

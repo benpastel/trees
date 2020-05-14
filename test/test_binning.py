@@ -26,5 +26,5 @@ def test_apply_bins():
     [3],
     [4]
   ], dtype=np.float32)
-  actual = apply_bins(X.T, bins)
-  assert_array_almost_equal(actual, [[0, 0, 1, 1, 2]])
+  actual = apply_bins(X, bins)
+  assert_array_almost_equal(actual, [[0], [0], [1], [1], [2]])
