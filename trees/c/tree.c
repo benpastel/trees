@@ -119,8 +119,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   __restrict preds        = PyArray_DATA((PyArrayObject *) preds_obj);
 
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint16_t max_nodes = (uint16_t) PyArray_DIM((PyArrayObject *) left_childs_obj, 0);
 
     // for each node n, an array of length node_counts[n] containing the rows in n
@@ -196,39 +196,47 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     while (depth++ < max_depth && node_count < max_nodes - 2 && done_count < node_count) {
         gettimeofday(&stat_start, NULL);
 
-        // build histograms for this entire level, feature-parallel
+        // build histograms
         for (uint16_t n = done_count; n < node_count; n++) {
             if (node_counts[n] == 0 || should_subtract[n]) continue;
 
-            #pragma omp parallel for
-            for (uint32_t c = 0; c < cols; c++) {
+            #pragma omp parallel
+            {
+                uint32_t * __restrict local_counts = calloc(cols*vals, sizeof(uint32_t));
+                double * __restrict local_sums = calloc(cols*vals, sizeof(double));
+                double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
 
-                // build histograms
-                // i.e. sum the stats for each value of X in this node
-
-                // aggregate in thread-local variables for efficiency
-                uint32_t local_counts [vals];
-                double local_sums [vals];
-                double local_sum_sqs [vals];
-                for (uint v = 0; v < vals; v++) {
-                    local_counts[v] = 0;
-                    local_sums[v] = 0.0;
-                    local_sum_sqs[v] = 0.0;
-                }
-                // the bottleneck: sum up stats for each row in this node
+                #pragma omp for
                 for (uint32_t i = 0; i < node_counts[n]; i++) {
                     uint32_t r = memberships[n][i];
-                    uint8_t v = X[c*rows + r];
-                    local_counts[v]++;
-                    local_sums[v] += y[r];
-                    local_sum_sqs[v] += y[r] * y[r];
+
+                    for (uint32_t c = 0; c < cols; c++) {
+                        uint8_t v = X[r*cols + c];
+                        uint64_t idx = c*vals + v;
+                        local_counts[idx]++;
+                        local_sums[idx] += y[r];
+                        local_sum_sqs[idx] += y[r]*y[r];
+                    }
                 }
-                // now save into the larger [col, node, value] arrays
-                for (uint v = 0; v < vals; v++) {
-                    counts[c*max_nodes*vals + n*vals + v] = local_counts[v];
-                    sums[c*max_nodes*vals + n*vals + v] = local_sums[v];
-                    sum_sqs[c*max_nodes*vals + n*vals + v] = local_sum_sqs[v];
+
+                // TODO try atomic
+                //  OR back to synchronizing on the nodes...
+                //  and/or fix the values so we can vectorize
+                #pragma omp critical
+                {
+                    for (uint32_t c = 0; c < cols; c++) {
+                        for (uint v = 0; v < vals; v++) {
+                            uint64_t local_i = c*vals + v;
+                            uint64_t global_i = c*max_nodes*vals + n*vals + v;
+                            counts[global_i] += local_counts[local_i];
+                            sums[global_i] += local_sums[local_i];
+                            sum_sqs[global_i] += local_sum_sqs[local_i];
+                        }
+                    }
                 }
+                free(local_counts);
+                free(local_sums);
+                free(local_sum_sqs);
             }
         }
 
@@ -426,7 +434,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
             for (uint32_t i = 0; i < node_counts[n]; i++) {
                 uint32_t r = memberships[n][i];
-                uint8_t v = X[split_col[n]*rows + r];
+                uint8_t v = X[r*cols + split_col[n]];
 
                 if (v <= split_lo[n]) {
                     memberships[left][left_i++] = r;

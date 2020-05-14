@@ -53,7 +53,7 @@ def fit_tree(
   preds = np.zeros(rows, dtype=np.double)
 
   node_count = build_tree(
-    XT,
+    XT.T.copy(),
     y,
     split_cols,
     split_lo_bins,
