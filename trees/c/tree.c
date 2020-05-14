@@ -579,7 +579,6 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
@@ -592,7 +591,6 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
                 right_childs[n];
         }
         out[r] = node_means[n];
-
     }
     gettimeofday(&loop_stop, NULL);
 
@@ -647,10 +645,10 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     float *   __restrict bins = PyArray_DATA((PyArrayObject *) bins_obj);
     uint8_t * __restrict out  = PyArray_DATA((PyArrayObject *) out_obj);
 
-    const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t rows = PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint8_t splits = PyArray_DIM((PyArrayObject *) bins_obj, 1);
-    const int vals = splits + 1; // may be 256, overflowing uint8_t
+    const uint vals = splits + 1; // may be 256, overflowing uint8_t
 
     if (vals > 256) {
         printf("Bad vals: %d\n", vals);
@@ -664,12 +662,9 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     //
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
-    for (uint64_t c = 0; c < cols; c++) {
-
-        uint8_t b = 0;
-
-        for (uint64_t r = 0; r < rows; r++) {
-            uint64_t idx = c*rows + r;
+    for (uint64_t r = 0; r < rows; r++) {
+        for (uint64_t c = 0; c < cols; c++) {
+            uint64_t idx = r*cols + c;
             float val = X[idx];
 
             // shortcut the 0 case because it's common (val <= bins[c*splits)
@@ -679,13 +674,15 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             // start at either the value of the previous iteration, or 1
             // this is kind of like a single round of binary search
             // but if there are multiple of the same value in a row, we'll shortcut nicely
-            if (val <= bins[c*splits + b - 1]) b = 1;
+            // if (val <= bins[c*splits + b - 1]) b = 1;
+            //
+            // TODO re-optimize with untransposed X
+            uint8_t b = 1;
 
             // now linear search
             while (b < vals - 1 && val > bins[c*splits + b]) b++;
 
             out[idx] = b;
-
         }
     }
     gettimeofday(&loop_stop, NULL);
