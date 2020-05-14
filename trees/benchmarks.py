@@ -292,12 +292,12 @@ if __name__ == '__main__':
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    # 'Agaricus':            (load_agaricus, Params(tree_count=tree_count)),
-    # 'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
-    # 'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
-    # 'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
+    'Agaricus':            (load_agaricus, Params(tree_count=tree_count)),
+    'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
+    'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
+    'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
     'M5':                  (load_m5,           Params(tree_count=tree_count)),
-    # 'Grupo':               (load_grupo,        Params(tree_count=tree_count))
+    'Grupo':               (load_grupo,        Params(tree_count=tree_count))
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
@@ -321,21 +321,21 @@ if __name__ == '__main__':
     else:
       print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
-    # with timed(f'train xgboost with: {xgboost_args}...'):
-    #   if is_regression:
-    #     model = xgb.XGBRegressor(**xgboost_args)
-    #   else:
-    #     model = xgb.XGBClassifier(**xgboost_args)
-    #   model.fit(train_X, train_y)
+    with timed(f'train xgboost with: {xgboost_args}...'):
+      if is_regression:
+        model = xgb.XGBRegressor(**xgboost_args)
+      else:
+        model = xgb.XGBClassifier(**xgboost_args)
+      model.fit(train_X, train_y)
 
-    # with timed(f'predict xgboost...'):
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'predict xgboost...'):
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
     with timed(f'train our tree with {tree_params}...'):
       # with profiled():
