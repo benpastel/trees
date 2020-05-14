@@ -200,6 +200,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = done_count; n < node_count; n++) {
             if (node_counts[n] == 0 || should_subtract[n]) continue;
 
+            // TODO don't parallelize when node is small
             #pragma omp parallel
             {
                 uint32_t * __restrict local_counts = calloc(cols*vals, sizeof(uint32_t));
@@ -671,13 +672,8 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             // since out was 0-initialized, we can just skip
             if (val <= bins[c*splits]) continue;
 
-            // start at either the value of the previous iteration, or 1
-            // this is kind of like a single round of binary search
-            // but if there are multiple of the same value in a row, we'll shortcut nicely
-            // if (val <= bins[c*splits + b - 1]) b = 1;
-            //
-            // TODO re-optimize with untransposed X
-            uint8_t b = 1;
+            // single round of binary search
+            uint8_t b = (val <= bins[c*splits + 32]) ? 31 : 1;
 
             // now linear search
             while (b < vals - 1 && val > bins[c*splits + b]) b++;
