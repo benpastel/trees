@@ -203,44 +203,57 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         for (uint16_t n = done_count; n < node_count; n++) {
             if (node_counts[n] == 0 || should_subtract[n]) continue;
 
-            // TODO don't parallelize when node is small
-            #pragma omp parallel
-            {
-                uint32_t * __restrict local_counts = calloc(cols*vals, sizeof(uint32_t));
-                double * __restrict local_sums = calloc(cols*vals, sizeof(double));
-                double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
-
-                #pragma omp for
-                for (uint32_t i = 0; i < node_counts[n]; i++) {
+            if (node_counts[n] < MIN_PARALLEL_SPLIT) {
+               for (uint32_t i = 0; i < node_counts[n]; i++) {
                     uint32_t r = memberships[n][i];
 
                     for (uint32_t c = 0; c < cols; c++) {
                         uint8_t v = X[r*cols + c];
-                        uint64_t idx = c*vals + v;
-                        local_counts[idx]++;
-                        local_sums[idx] += y[r];
-                        local_sum_sqs[idx] += y[r]*y[r];
+                        uint64_t idx = c*max_nodes*vals + n*vals + v;
+                        counts[idx]++;
+                        sums[idx] += y[r];
+                        sum_sqs[idx] += y[r]*y[r];
                     }
                 }
-
-                // TODO try atomic
-                //  OR back to synchronizing on the nodes...
-                //  and/or fix the values so we can vectorize
-                #pragma omp critical
+            } else {
+                #pragma omp parallel
                 {
-                    for (uint32_t c = 0; c < cols; c++) {
-                        for (uint v = 0; v < vals; v++) {
-                            uint64_t local_i = c*vals + v;
-                            uint64_t global_i = c*max_nodes*vals + n*vals + v;
-                            counts[global_i] += local_counts[local_i];
-                            sums[global_i] += local_sums[local_i];
-                            sum_sqs[global_i] += local_sum_sqs[local_i];
+                    uint32_t * __restrict local_counts = calloc(cols*vals, sizeof(uint32_t));
+                    double * __restrict local_sums = calloc(cols*vals, sizeof(double));
+                    double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
+
+                    #pragma omp for
+                    for (uint32_t i = 0; i < node_counts[n]; i++) {
+                        uint32_t r = memberships[n][i];
+
+                        for (uint32_t c = 0; c < cols; c++) {
+                            uint8_t v = X[r*cols + c];
+                            uint64_t idx = c*vals + v;
+                            local_counts[idx]++;
+                            local_sums[idx] += y[r];
+                            local_sum_sqs[idx] += y[r]*y[r];
                         }
                     }
+
+                    // TODO try atomic
+                    //  OR back to synchronizing on the nodes...
+                    //  and/or fix the values so we can vectorize
+                    #pragma omp critical
+                    {
+                        for (uint32_t c = 0; c < cols; c++) {
+                            for (uint v = 0; v < vals; v++) {
+                                uint64_t local_i = c*vals + v;
+                                uint64_t global_i = c*max_nodes*vals + n*vals + v;
+                                counts[global_i] += local_counts[local_i];
+                                sums[global_i] += local_sums[local_i];
+                                sum_sqs[global_i] += local_sum_sqs[local_i];
+                            }
+                        }
+                    }
+                    free(local_counts);
+                    free(local_sums);
+                    free(local_sum_sqs);
                 }
-                free(local_counts);
-                free(local_sums);
-                free(local_sum_sqs);
             }
         }
 
@@ -766,7 +779,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             if (val <= bins[c*splits]) continue;
 
             // single round of binary search
-            uint8_t b = (val <= bins[c*splits + 32]) ? 31 : 1;
+            uint8_t b = val <= bins[c*splits + splits/2] ? 1 : splits/2 + 1;
 
             // now linear search
             while (b < vals - 1 && val > bins[c*splits + b]) b++;
