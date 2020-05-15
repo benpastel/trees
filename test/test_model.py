@@ -6,32 +6,27 @@ from trees.params import Params
 import pprint
 
 def test_model():
-  np.random.seed(0)
   pp = pprint.PrettyPrinter(indent=4)
 
   X = np.random.random((100, 3))
   y = np.random.random(100)
 
-  model, preds_from_fit1 = fit(X, y, Params(tree_count=1, learning_rate=1.0, smooth_factor=0.0, bucket_count=256, row_sample=1.0))
+  model, preds_from_fit1 = fit(X, y, Params(tree_count=1, learning_rate=1.0, smooth_factor=0.0, bucket_count=256))
   preds_from_predict = predict(model, X)
   assert_array_almost_equal(preds_from_fit1, preds_from_predict)
 
-  model, preds_from_fit2 = fit(X, y, Params(tree_count=1, learning_rate=1.0, smooth_factor=0.0, bucket_count=2, row_sample=1.0))
+  model, preds_from_fit2 = fit(X, y, Params(tree_count=1, learning_rate=1.0, smooth_factor=0.0, bucket_count=2))
   preds_from_predict = predict(model, X)
   assert_array_almost_equal(preds_from_fit2, preds_from_predict)
 
-  model, preds_from_fit10 = fit(X, y, Params(tree_count=10, learning_rate=1.0, smooth_factor=0.0, bucket_count=256, row_sample=1.0))
+  model, preds_from_fit10 = fit(X, y, Params(tree_count=10, learning_rate=1.0, smooth_factor=0.0, bucket_count=256))
   preds_from_predict = predict(model, X)
   assert_array_almost_equal(preds_from_fit10, preds_from_predict)
 
-  model, preds_from_sample = fit(X, y, Params(tree_count=10, learning_rate=1.0, smooth_factor=0.0, bucket_count=256, row_sample=0.5))
 
   loss_1 = np.sum(np.abs(y - preds_from_fit1))
   loss_10 = np.sum(np.abs(y - preds_from_fit10))
   assert loss_1 > loss_10 - 0.0001, "training loss should decrease when we add more trees"
-
-  loss_sample = np.sum(np.abs(y-preds_from_sample))
-  assert loss_10 < loss_sample, "training loss should decrease when row sampling"
 
   loss_2 = np.sum(np.abs(y - preds_from_fit2))
   assert loss_1 < loss_2, "training loss should increase with fewer buckets"

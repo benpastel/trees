@@ -12,5 +12,4 @@ class Params:
   bucket_count: int = 64
   bucket_sample_count: int = 10000
   trees_per_bucketing: int = 2
-  row_sample: float = 0.8
 

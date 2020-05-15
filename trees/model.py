@@ -112,7 +112,6 @@ def fit(
   assert 2 <= params.bucket_count <= 256
   assert 0 < params.bucket_sample_count
   assert 0 < params.trees_per_bucketing
-  assert 0 < params.row_sample <= 1.0
   targets_are_float = (y.dtype != np.bool)
 
   X = X.astype(np.float32, copy=False)
@@ -129,11 +128,9 @@ def fit(
       bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
       bin_X = apply_bins(X, bins)
 
-    in_sample = (np.random.rand(rows) <= params.row_sample)
+    target = params.learning_rate * (y - preds)
 
-    target = params.learning_rate * (y[in_sample] - preds[in_sample])
-
-    tree, new_preds = fit_tree(bin_X[in_sample], target, bins, params)
+    tree, new_preds = fit_tree(bin_X, target, bins, params)
 
     if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
       # 2 trees with 1 node in a row
@@ -141,7 +138,7 @@ def fit(
       return Model(trees, targets_are_float, mean_y), preds
 
     trees.append(tree)
-    preds[in_sample] += new_preds
+    preds += new_preds
 
   return Model(trees, targets_are_float, mean_y), preds
 
