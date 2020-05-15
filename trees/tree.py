@@ -30,6 +30,7 @@ def fit_tree(
   assert bins.shape == (cols, params.bucket_count-1)
   assert bins.dtype == np.float32
   assert 0 <= params.smooth_factor
+  assert 0 <= params.weight_smooth_factor
   assert 0 <= params.third_split_penalty
   assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
@@ -64,6 +65,7 @@ def fit_tree(
     node_means,
     preds,
     params.smooth_factor,
+    params.weight_smooth_factor,
     params.max_depth,
     params.third_split_penalty,
     params.bucket_count)

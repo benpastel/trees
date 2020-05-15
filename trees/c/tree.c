@@ -36,6 +36,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
     PyObject *preds_arg;
     double smooth_factor_arg;
+    double weight_smooth_factor_arg;
     int max_depth_arg;
     double third_split_penalty_arg;
     int vals_arg;
@@ -54,7 +55,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     gettimeofday(&total_start, NULL);
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!didi",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!O!ddidi",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &split_col_arg,
@@ -66,10 +67,12 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &preds_arg,
         &smooth_factor_arg,
+        &weight_smooth_factor_arg,
         &max_depth_arg,
         &third_split_penalty_arg,
         &vals_arg)) return NULL;
     const double smooth_factor = smooth_factor_arg;
+    const double weight_smooth_factor = weight_smooth_factor_arg;
     const int max_depth = max_depth_arg;
     const double third_split_penalty = third_split_penalty_arg;
     const uint vals = vals_arg;
@@ -574,7 +577,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         // write predictions for non-empty leaves only
         if (!node_counts[n] || left_childs[n]) continue;
 
-        double mean = node_sums[n] / node_counts[n];
+        double mean = node_sums[n] / (node_counts[n] + weight_smooth_factor);
         for (uint32_t i = 0; i < node_counts[n]; i++) {
             uint32_t r = memberships[n][i];
             preds[r] = mean;
