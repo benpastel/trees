@@ -113,6 +113,7 @@ def fit(
   assert 0 < params.bucket_sample_count
   assert 0 < params.trees_per_bucketing
   assert 0 < params.row_sample <= 1.0
+  assert params.early_stopping_rounds != 0
   targets_are_float = (y.dtype != np.bool)
 
   X = X.astype(np.float32, copy=False)
@@ -122,24 +123,35 @@ def fit(
 
   bins = None
   bin_X = None
+  in_sample = None
 
   trees = []
+  no_improve_rounds = 0
   for t in range(params.tree_count):
     if (t % params.trees_per_bucketing) == 0:
+      in_sample = (np.random.rand(rows) <= params.row_sample)
+      out_sample = ~in_sample
       bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
-      bin_X = apply_bins(X, bins)
-
-    in_sample = (np.random.rand(rows) <= params.row_sample)
+      bin_X = apply_bins(X[in_sample], bins)
 
     target = params.learning_rate * (y[in_sample] - preds[in_sample])
 
-    tree, new_preds = fit_tree(bin_X[in_sample], target, bins, params)
+    tree, new_preds = fit_tree(bin_X, target, bins, params)
 
-    if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
-      # 2 trees with 1 node in a row
-      # don't add the 2nd one, and stop early
-      return Model(trees, targets_are_float, mean_y), preds
+    if params.row_sample <= 0.9:
+      # does adding this tree increase performance on the out-of-sample rows?
+      err_without_tree = y[out_sample] - preds[out_sample]
+      err_with_tree = err_without_tree - eval_tree(tree, X[out_sample])
 
+      if np.sum(err_without_tree*err_without_tree) <= np.sum(err_with_tree*err_with_tree):
+        no_improve_rounds += 1
+      else:
+        no_improve_rounds = 0
+
+    if no_improve_rounds == params.early_stopping_rounds or tree.node_count == 1:
+      break
+
+    # add the tree to the model and keep training
     trees.append(tree)
     preds[in_sample] += new_preds
 
