@@ -36,7 +36,7 @@ def test_fit_tree():
     X,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=0.0, bucket_count=256)
+    Params(smooth_factor=1.0, third_split_penalty=0.0, bucket_count=256, weight_smooth_factor=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -63,7 +63,7 @@ def test_fit_tree():
     X,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=0.01, bucket_count=256)
+    Params(smooth_factor=1.0, third_split_penalty=0.01, bucket_count=256, weight_smooth_factor=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -75,6 +75,17 @@ def test_fit_tree():
   assert_array_almost_equal(tree.split_hi_vals,  [9, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [0, 7/4, 8, 100])
   assert_array_almost_equal(preds, [8, 7/4, 8, 7/4, 7/4, 100, 7/4, 100, 100])
+
+  # same as above, but with weight_smooth_factor=2.0, it's like adding 2 values to each leaf with y=0
+  tree, preds = fit_tree(
+    X,
+    y,
+    bins,
+    Params(smooth_factor=1.0, third_split_penalty=0.01, bucket_count=256, weight_smooth_factor=2.0)
+  )
+  assert tree.node_count == 4
+  assert_array_almost_equal(tree.node_means, [0, 4, 60, 7/6])
+  assert_array_almost_equal(preds, [4, 7/6, 4, 7/6, 7/6, 60, 7/6, 60, 60])
 
   #             (9,9)
   #           /   |  \
@@ -89,7 +100,7 @@ def test_fit_tree():
     X,
     y,
     bins,
-    Params(smooth_factor=1.0, third_split_penalty=10.0, bucket_count=256)
+    Params(smooth_factor=1.0, third_split_penalty=10.0, bucket_count=256, weight_smooth_factor=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 4
@@ -119,7 +130,7 @@ def test_fit_tree():
     X,
     y,
     bins,
-    Params(smooth_factor=0.0, bucket_count=256)
+    Params(smooth_factor=0.0, bucket_count=256, weight_smooth_factor=0.0)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 10
