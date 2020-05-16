@@ -292,7 +292,7 @@ if __name__ == '__main__':
 
   # name => (function that loads data and returns (X, y), params)
   benchmarks = {
-    'Agaricus':            (load_agaricus, Params(tree_count=tree_count)),
+    'Agaricus':            (load_agaricus,     Params(tree_count=tree_count)),
     'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
     'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
     'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
@@ -337,12 +337,12 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    with timed(f'train our tree with {tree_params}...'):
+    with timed(f'\n{tree_params}: train our tree ...'):
       # with profiled():
       model, _ = fit(train_X, train_y, tree_params)
     print(model.__str__(verbose=False))
 
-    with timed(f'predict our tree...'):
+    with timed(f'  predict our tree...'):
       # with profiled():
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)
