@@ -24,7 +24,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 #define SPLIT_BUF_SIZE 1024
 #define MIN_PARALLEL_SPLIT 1024
@@ -139,7 +139,10 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     uint16_t node_count = 1;
 
+    // TODO refactor and reduce node metadata
+    // some is now redundant like should_split
     double   node_scores  [max_nodes];
+    double   node_orig_scores [max_nodes];
     uint32_t node_counts  [max_nodes];
     double   node_sums    [max_nodes];
     double   node_sum_sqs [max_nodes];
@@ -147,6 +150,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     bool     should_split [max_nodes];
     bool     should_subtract [max_nodes];
     bool     is_done    [max_nodes];
+    bool     is_checked [max_nodes];
     int      node_depth [max_nodes];
 
     uint32_t left_counts [max_nodes];
@@ -167,6 +171,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
     for (uint16_t n = 0; n < max_nodes; n++) {
         node_scores[n] = DBL_MAX;
+        node_orig_scores[n] = 0;
         node_counts[n] = 0;
         node_sums[n] = 0.0;
         node_sum_sqs[n] = 0.0;
@@ -174,6 +179,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
         should_split[n] = false;
         should_subtract[n] = false;
         is_done[n] = false;
+        is_checked[n] = false;
         memberships[n] = NULL;
         node_depth[n] = 1;
         // left_counts etc. are always set before use
@@ -196,51 +202,21 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     node_sums[0] = root_sum;
     node_sum_sqs[0] = root_sum_sq;
     node_scores[0] = root_var;
+    node_orig_scores[0] = root_var;
 
     gettimeofday(&init_end, NULL);
 
     while (node_count <= max_nodes - 3) {
         gettimeofday(&stat_start, NULL);
 
-        // find the splittable node with the highest ID
-        int n = node_count - 1;
-        while (n >= 0 && (is_done[n] || node_counts[n] == 0 || node_depth[n] >= max_depth)) {
-            n--;
-        }
+        // build histograms for any nodes that need them
+        for (uint n = 0; n < node_count; n++) {
+            if (node_counts[n] == 0 || should_subtract[n] || is_checked[n] || is_done[n]) continue;
 
-        if (n < 0) {
-            // all nodes done
-            break;
-        }
-
-        if (should_subtract[n]) {
-            if (n+2 >= node_count) {
-                printf("bad siblings\n"); fflush(stdout);
-                return NULL;
-            }
-
-            // instead of summing stats from data,
-            // derive from (parents - siblings)
-            // this requires that we've already calculated the siblings
-            // so the siblings must be at n+1 and n+2
-            for (uint32_t c = 0; c < cols; c++) {
-                for (uint v = 0; v < vals; v++) {
-                    uint64_t i = c*max_nodes*vals + n*vals + v;
-                    uint64_t parent_i = c*max_nodes*vals + node_parents[n]*vals + v;
-                    uint64_t bro_i = c*max_nodes*vals + (n+1)*vals + v;
-                    uint64_t sis_i = c*max_nodes*vals + (n+2)*vals + v;
-
-                    counts[i]  = counts[parent_i]  - counts[bro_i]  - counts[sis_i];
-                    sums[i]    = sums[parent_i]    - sums[bro_i]    - sums[sis_i];
-                    sum_sqs[i] = sum_sqs[parent_i] - sum_sqs[bro_i] - sum_sqs[sis_i];
-                }
-            }
-        } else {
-            // build histograms
-            // i.e. sum the stats for each value of X in this node
             if (node_counts[n] < MIN_PARALLEL_SPLIT) {
-                for (uint32_t i = 0; i < node_counts[n]; i++) {
+               for (uint32_t i = 0; i < node_counts[n]; i++) {
                     uint32_t r = memberships[n][i];
+
                     for (uint32_t c = 0; c < cols; c++) {
                         uint8_t v = X[r*cols + c];
                         uint64_t idx = c*max_nodes*vals + n*vals + v;
@@ -290,264 +266,310 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
         }
-        gettimeofday(&choose_split_start, NULL);
-        stat_ms += msec(stat_start, choose_split_start);
 
-        // choose splits for this node
-        // TODO parallelize on cols & synchronize?
-        for (uint32_t c = 0; c < cols; c++) {
-            // evaluate each possible splitting point
-            // running sums from the left side
-            uint32_t left_count = 0;
-            double left_sum = 0.0;
-            double left_sum_sq = 0.0;
-            for (uint lo = 0; lo < vals - 2; lo++) {
-                uint64_t lo_i = c*max_nodes*vals + n*vals + lo;
+        // subtract histograms for any nodes that need them
+        #pragma omp parallel for
+        for (uint n = 0; n < node_count; n++) {
+            if (node_counts[n] == 0 || !should_subtract[n] || is_checked[n] || is_done[n]) continue;
 
-                // force non-empty left split
-                if (counts[lo_i] == 0) continue;
+            for (uint32_t c = 0; c < cols; c++) {
+                for (uint v = 0; v < vals; v++) {
+                    uint64_t i = c*max_nodes*vals + n*vals + v;
+                    uint64_t parent_i = c*max_nodes*vals + node_parents[n]*vals + v;
+                    uint64_t bro_i = c*max_nodes*vals + (n+1)*vals + v;
+                    uint64_t sis_i = c*max_nodes*vals + (n+2)*vals + v;
 
-                left_count += counts[lo_i];
-                left_sum += sums[lo_i];
-                left_sum_sq += sum_sqs[lo_i];
-                double left_var = left_sum_sq - (left_sum * left_sum / left_count);
-
-                uint32_t mid_count = 0;
-                double mid_sum = 0.0;
-                double mid_sum_sq = 0.0;
-
-                // allow mid split to be empty in the hi == lo case ONLY
-                for (uint hi = lo; hi < vals - 1; hi++) {
-                    uint64_t hi_i = c*max_nodes*vals + n*vals + hi;
-                    double split_penalty;
-
-                    if (hi > lo && counts[hi_i] == 0) {
-                        // this value doesn't change the split stats
-                        continue;
-                    } else if (hi > lo) {
-                        // middle split is nonempty
-                        // penalize it by a factor
-                        split_penalty = penalty + third_split_penalty * penalty;
-
-                        mid_count += counts[hi_i];
-                        mid_sum += sums[hi_i];
-                        mid_sum_sq += sum_sqs[hi_i];
-                    } else {
-                        // middle split is empty
-                        split_penalty = penalty;
-                    }
-
-                    uint32_t right_count = node_counts[n] - left_count - mid_count;
-                    double right_sum = node_sums[n] - left_sum - mid_sum;
-                    double right_sum_sq = node_sum_sqs[n] - left_sum_sq - mid_sum_sq;
-
-                    // force non-empty right split
-                    if (right_count == 0) break;
-
-                    // weighted average of splits' variance
-                    double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
-                    double right_var = right_sum_sq - (right_sum * right_sum / right_count);
-                    double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
-
-                    if (score < node_scores[n]) {
-                        node_scores[n] = score;
-                        split_col[n] = c;
-                        split_lo[n] = lo;
-                        split_hi[n] = hi;
-
-                        left_counts[n] = left_count;
-                        mid_counts[n] = mid_count;
-                        right_counts[n] = right_count;
-
-                        left_sums[n] = left_sum;
-                        mid_sums[n] = mid_sum;
-                        right_sums[n] = right_sum;
-
-                        left_sum_sqs[n] = left_sum_sq;
-                        mid_sum_sqs[n] = mid_sum_sq;
-                        right_sum_sqs[n] = right_sum_sq;
-
-                        left_vars[n] = left_var;
-                        mid_vars[n] = mid_var;
-                        right_vars[n] = right_var;
-
-                        should_split[n] = true;
-                    }
+                    counts[i]  = counts[parent_i]  - counts[bro_i]  - counts[sis_i];
+                    sums[i]    = sums[parent_i]    - sums[bro_i]    - sums[sis_i];
+                    sum_sqs[i] = sum_sqs[parent_i] - sum_sqs[bro_i] - sum_sqs[sis_i];
                 }
             }
         }
+        gettimeofday(&choose_split_start, NULL);
+        stat_ms += msec(stat_start, choose_split_start);
 
+        // evaluate splits for any unchecked nodes
+        for (uint n = 0; n < node_count; n++) {
+            if (node_counts[n] < 2 || is_checked[n] || is_done[n]) continue;
+
+            // choose splits for this node
+            for (uint32_t c = 0; c < cols; c++) {
+                // evaluate each possible splitting point
+                // running sums from the left side
+                uint32_t left_count = 0;
+                double left_sum = 0.0;
+                double left_sum_sq = 0.0;
+                for (uint lo = 0; lo < vals - 2; lo++) {
+                    uint64_t lo_i = c*max_nodes*vals + n*vals + lo;
+
+                    // force non-empty left split
+                    if (counts[lo_i] == 0) continue;
+
+                    left_count += counts[lo_i];
+                    left_sum += sums[lo_i];
+                    left_sum_sq += sum_sqs[lo_i];
+                    double left_var = left_sum_sq - (left_sum * left_sum / left_count);
+
+                    uint32_t mid_count = 0;
+                    double mid_sum = 0.0;
+                    double mid_sum_sq = 0.0;
+
+                    // allow mid split to be empty in the hi == lo case ONLY
+                    for (uint hi = lo; hi < vals - 1; hi++) {
+                        uint64_t hi_i = c*max_nodes*vals + n*vals + hi;
+                        double split_penalty;
+
+                        if (hi > lo && counts[hi_i] == 0) {
+                            // this value doesn't change the split stats
+                            continue;
+                        } else if (hi > lo) {
+                            // middle split is nonempty
+                            // penalize it by a factor
+                            split_penalty = penalty + third_split_penalty * penalty;
+
+                            mid_count += counts[hi_i];
+                            mid_sum += sums[hi_i];
+                            mid_sum_sq += sum_sqs[hi_i];
+                        } else {
+                            // middle split is empty
+                            split_penalty = penalty;
+                        }
+
+                        uint32_t right_count = node_counts[n] - left_count - mid_count;
+                        double right_sum = node_sums[n] - left_sum - mid_sum;
+                        double right_sum_sq = node_sum_sqs[n] - left_sum_sq - mid_sum_sq;
+
+                        // force non-empty right split
+                        if (right_count == 0) break;
+
+                        // weighted average of splits' variance
+                        double mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count);
+                        double right_var = right_sum_sq - (right_sum * right_sum / right_count);
+                        double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
+
+                        if (score < node_scores[n]) {
+                            node_scores[n] = score;
+                            split_col[n] = c;
+                            split_lo[n] = lo;
+                            split_hi[n] = hi;
+
+                            left_counts[n] = left_count;
+                            mid_counts[n] = mid_count;
+                            right_counts[n] = right_count;
+
+                            left_sums[n] = left_sum;
+                            mid_sums[n] = mid_sum;
+                            right_sums[n] = right_sum;
+
+                            left_sum_sqs[n] = left_sum_sq;
+                            mid_sum_sqs[n] = mid_sum_sq;
+                            right_sum_sqs[n] = right_sum_sq;
+
+                            left_vars[n] = left_var;
+                            mid_vars[n] = mid_var;
+                            right_vars[n] = right_var;
+
+                            should_split[n] = true;
+                        }
+                    }
+                }
+            }
+            is_checked[n] = true;
+        }
         gettimeofday(&make_split_start, NULL);
         choose_split_ms += msec(choose_split_start, make_split_start);
 
-        // we've finised choosing the splits
-        if (should_split[n]) {
-            // child with the most data is going to derive stats by subtraction
-            // so it must have the lowest id to be processed last
-            if (left_counts[n] >= mid_counts[n] && left_counts[n] >= right_counts[n]) {
-                left_childs[n] = node_count + 0;
-                mid_childs[n] = node_count + 1;
-                right_childs[n] = node_count + 2;
-                should_subtract[left_childs[n]] = true;
-            } else if (mid_counts[n] >= right_counts[n]) {
-                left_childs[n] = node_count + 1;
-                mid_childs[n] = node_count + 0;
-                right_childs[n] = node_count + 2;
-                should_subtract[mid_childs[n]] = true;
-            } else {
-                left_childs[n] = node_count + 1;
-                mid_childs[n] = node_count + 2;
-                right_childs[n] = node_count + 0;
-                should_subtract[right_childs[n]] = true;
+        // choose the best node to split
+        double best_gain = 0;
+        uint best_n = 0;
+        for (uint n = 0; n < node_count; n++) {
+            if (node_counts[n] < 2 || is_done[n] || !should_split[n]) continue;
+
+            double gain = node_orig_scores[n] - node_scores[n];
+            if (gain > best_gain) {
+                best_gain = gain;
+                best_n = n;
             }
-            node_parents[left_childs[n]] = n;
-            node_parents[mid_childs[n]] = n;
-            node_parents[right_childs[n]] = n;
+        }
+        if (best_gain == 0) {
+            // nothing worth splitting; end early
+            break;
+        }
+        // make the split
+        uint n = best_n;
+        // child with the most data is going to derive stats by subtraction
+        // so it must have the lowest id to be processed last
+        // TODO no longer necessary
+        if (left_counts[n] >= mid_counts[n] && left_counts[n] >= right_counts[n]) {
+            left_childs[n] = node_count + 0;
+            mid_childs[n] = node_count + 1;
+            right_childs[n] = node_count + 2;
+            should_subtract[left_childs[n]] = true;
+        } else if (mid_counts[n] >= right_counts[n]) {
+            left_childs[n] = node_count + 1;
+            mid_childs[n] = node_count + 0;
+            right_childs[n] = node_count + 2;
+            should_subtract[mid_childs[n]] = true;
+        } else {
+            left_childs[n] = node_count + 1;
+            mid_childs[n] = node_count + 2;
+            right_childs[n] = node_count + 0;
+            should_subtract[right_childs[n]] = true;
+        }
+        node_parents[left_childs[n]] = n;
+        node_parents[mid_childs[n]] = n;
+        node_parents[right_childs[n]] = n;
 
-            node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
-            node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
-            node_scores[right_childs[n]] = right_vars[n] / right_counts[n];
+        node_scores[left_childs[n]] = left_vars[n] / left_counts[n];
+        node_scores[mid_childs[n]] = (mid_counts[n] == 0) ? 0 : mid_vars[n] / mid_counts[n];
+        node_scores[right_childs[n]] = right_vars[n] / right_counts[n];
 
-            node_counts[left_childs[n]] = left_counts[n];
-            node_counts[mid_childs[n]] = mid_counts[n];
-            node_counts[right_childs[n]] = right_counts[n];
+        node_orig_scores[left_childs[n]] = node_scores[left_childs[n]];
+        node_orig_scores[mid_childs[n]] = node_scores[mid_childs[n]];
+        node_orig_scores[right_childs[n]] = node_scores[right_childs[n]];
 
-            node_sums[left_childs[n]] = left_sums[n];
-            node_sums[mid_childs[n]] = mid_sums[n];
-            node_sums[right_childs[n]] = right_sums[n];
+        node_counts[left_childs[n]] = left_counts[n];
+        node_counts[mid_childs[n]] = mid_counts[n];
+        node_counts[right_childs[n]] = right_counts[n];
 
-            node_sum_sqs[left_childs[n]] = left_sum_sqs[n];
-            node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
-            node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
+        node_sums[left_childs[n]] = left_sums[n];
+        node_sums[mid_childs[n]] = mid_sums[n];
+        node_sums[right_childs[n]] = right_sums[n];
 
-            node_depth[left_childs[n]] = node_depth[n] + 1;
-            node_depth[mid_childs[n]] = node_depth[n] + 1;
-            node_depth[right_childs[n]] = node_depth[n] + 1;
+        node_sum_sqs[left_childs[n]] = left_sum_sqs[n];
+        node_sum_sqs[mid_childs[n]] = mid_sum_sqs[n];
+        node_sum_sqs[right_childs[n]] = right_sum_sqs[n];
 
-            node_count += 3;
+        node_depth[left_childs[n]] = node_depth[n] + 1;
+        node_depth[mid_childs[n]] = node_depth[n] + 1;
+        node_depth[right_childs[n]] = node_depth[n] + 1;
 
-            // update memberships
-            uint32_t left_i = 0;
-            uint32_t mid_i = 0;
-            uint32_t right_i = 0;
+        if (node_depth[left_childs[n]] == max_depth) is_done[left_childs[n]] = true;
+        if (node_depth[mid_childs[n]] == max_depth) is_done[mid_childs[n]] = true;
+        if (node_depth[right_childs[n]] == max_depth) is_done[right_childs[n]] = true;
 
-            uint16_t left = left_childs[n];
-            uint16_t mid = mid_childs[n];
-            uint16_t right = right_childs[n];
+        node_count += 3;
 
-            memberships[left] = calloc(node_counts[left], sizeof(uint32_t));
-            if (node_counts[mid] > 0) {
-                memberships[mid] = calloc(node_counts[mid], sizeof(uint32_t));
+        // update memberships
+        uint32_t left_i = 0;
+        uint32_t mid_i = 0;
+        uint32_t right_i = 0;
+
+        uint16_t left = left_childs[n];
+        uint16_t mid = mid_childs[n];
+        uint16_t right = right_childs[n];
+
+        memberships[left] = calloc(node_counts[left], sizeof(uint32_t));
+        if (node_counts[mid] > 0) {
+            memberships[mid] = calloc(node_counts[mid], sizeof(uint32_t));
+        }
+        memberships[right] = calloc(node_counts[right], sizeof(uint32_t));
+
+        if (node_counts[n] < MIN_PARALLEL_SPLIT) {
+            // single-threaded
+            for (uint32_t i = 0; i < node_counts[n]; i++) {
+                uint32_t r = memberships[n][i];
+                uint8_t v = X[r*cols + split_col[n]];
+
+                if (v <= split_lo[n]) {
+                    memberships[left][left_i++] = r;
+                } else if (v <= split_hi[n]) {
+                    memberships[mid][mid_i++] = r;
+                } else {
+                    memberships[right][right_i++] = r;
+                }
             }
-            memberships[right] = calloc(node_counts[right], sizeof(uint32_t));
+        } else {
+            // multi-threaded
+            //
+            // the order of rows doesn't matter
+            //
+            // aggregate a buffer within each thread
+            // once full, copy it into memberships
+            #pragma omp parallel
+            {
+                uint32_t left_buf [SPLIT_BUF_SIZE];
+                uint32_t mid_buf  [SPLIT_BUF_SIZE];
+                uint32_t right_buf [SPLIT_BUF_SIZE];
 
+                uint32_t local_left_i = 0;
+                uint32_t local_mid_i = 0;
+                uint32_t local_right_i = 0;
 
-            if (node_counts[n] < MIN_PARALLEL_SPLIT) {
-                // single-threaded
+                uint32_t copy_start;
+
+                #pragma omp for
                 for (uint32_t i = 0; i < node_counts[n]; i++) {
                     uint32_t r = memberships[n][i];
                     uint8_t v = X[r*cols + split_col[n]];
 
                     if (v <= split_lo[n]) {
-                        memberships[left][left_i++] = r;
+                        left_buf[local_left_i++] = r;
                     } else if (v <= split_hi[n]) {
-                        memberships[mid][mid_i++] = r;
+                        mid_buf[local_mid_i++] = r;
                     } else {
-                        memberships[right][right_i++] = r;
+                        right_buf[local_right_i++] = r;
                     }
-                }
-            } else {
-                // multi-threaded
-                //
-                // the order of rows doesn't matter
-                //
-                // aggregate a buffer within each thread
-                // once full, copy it into memberships
-                #pragma omp parallel
-                {
-                    uint32_t left_buf [SPLIT_BUF_SIZE];
-                    uint32_t mid_buf  [SPLIT_BUF_SIZE];
-                    uint32_t right_buf [SPLIT_BUF_SIZE];
 
-                    uint32_t local_left_i = 0;
-                    uint32_t local_mid_i = 0;
-                    uint32_t local_right_i = 0;
-
-                    uint32_t copy_start;
-
-                    #pragma omp for
-                    for (uint32_t i = 0; i < node_counts[n]; i++) {
-                        uint32_t r = memberships[n][i];
-                        uint8_t v = X[r*cols + split_col[n]];
-
-                        if (v <= split_lo[n]) {
-                            left_buf[local_left_i++] = r;
-                        } else if (v <= split_hi[n]) {
-                            mid_buf[local_mid_i++] = r;
-                        } else {
-                            right_buf[local_right_i++] = r;
-                        }
-
-                        if (local_left_i == SPLIT_BUF_SIZE) {
-                            #pragma omp critical
-                            {
-                                copy_start = left_i;
-                                left_i = copy_start + SPLIT_BUF_SIZE;
-                            }
-                            memcpy(memberships[left] + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
-                            local_left_i = 0;
-                        }
-                        if (local_mid_i == SPLIT_BUF_SIZE) {
-                            #pragma omp critical
-                            {
-                                copy_start = mid_i;
-                                mid_i = copy_start + SPLIT_BUF_SIZE;
-                            }
-                            memcpy(memberships[mid] + copy_start, mid_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
-                            local_mid_i = 0;
-                        }
-                        if (local_right_i == SPLIT_BUF_SIZE) {
-                            #pragma omp critical
-                            {
-                                copy_start = right_i;
-                                right_i = copy_start + SPLIT_BUF_SIZE;
-                            }
-                            memcpy(memberships[right] + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
-                            local_right_i = 0;
-                        }
-                    }
-                    // copy anything leftover in the buffers
-                    if (local_left_i > 0) {
+                    if (local_left_i == SPLIT_BUF_SIZE) {
                         #pragma omp critical
                         {
                             copy_start = left_i;
-                            left_i = copy_start + local_left_i;
+                            left_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(memberships[left] + copy_start, left_buf, local_left_i * sizeof(uint32_t));
+                        memcpy(memberships[left] + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                        local_left_i = 0;
                     }
-                    if (local_mid_i > 0) {
+                    if (local_mid_i == SPLIT_BUF_SIZE) {
                         #pragma omp critical
                         {
                             copy_start = mid_i;
-                            mid_i = copy_start + local_mid_i;
+                            mid_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(memberships[mid] + copy_start, mid_buf, local_mid_i * sizeof(uint32_t));
-
+                        memcpy(memberships[mid] + copy_start, mid_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                        local_mid_i = 0;
                     }
-                    if (local_right_i > 0) {
+                    if (local_right_i == SPLIT_BUF_SIZE) {
                         #pragma omp critical
                         {
                             copy_start = right_i;
-                            right_i = copy_start + local_right_i;
+                            right_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(memberships[right] + copy_start, right_buf, local_right_i * sizeof(uint32_t));
+                        memcpy(memberships[right] + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
+                        local_right_i = 0;
                     }
                 }
-            }
+                // copy anything leftover in the buffers
+                if (local_left_i > 0) {
+                    #pragma omp critical
+                    {
+                        copy_start = left_i;
+                        left_i = copy_start + local_left_i;
+                    }
+                    memcpy(memberships[left] + copy_start, left_buf, local_left_i * sizeof(uint32_t));
+                }
+                if (local_mid_i > 0) {
+                    #pragma omp critical
+                    {
+                        copy_start = mid_i;
+                        mid_i = copy_start + local_mid_i;
+                    }
+                    memcpy(memberships[mid] + copy_start, mid_buf, local_mid_i * sizeof(uint32_t));
 
-            free(memberships[n]);
-            memberships[n] = NULL;
+                }
+                if (local_right_i > 0) {
+                    #pragma omp critical
+                    {
+                        copy_start = right_i;
+                        right_i = copy_start + local_right_i;
+                    }
+                    memcpy(memberships[right] + copy_start, right_buf, local_right_i * sizeof(uint32_t));
+                }
+            }
         }
+
+        free(memberships[n]);
+        memberships[n] = NULL;
         is_done[n] = true;
         gettimeofday(&split_end, NULL);
         make_split_ms += msec(make_split_start, split_end);
@@ -572,7 +594,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             memberships[n] = NULL;
         }
     }
-
     free(counts);
     free(sums);
     free(sum_sqs);
