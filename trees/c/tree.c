@@ -345,7 +345,6 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                         double right_var = right_sum_sq - (right_sum * right_sum / right_count);
                         double score = (left_var + mid_var + right_var + split_penalty) / node_counts[n];
 
-                        // TODO something to make sure node_scores etc are on different cache lines?
                         if (score < node_scores[n]) {
                             node_scores[n] = score;
                             split_col[n] = c;
@@ -382,7 +381,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
 
         // update node metadata for the splits
         int new_node_count = node_count;
-        for (uint16_t n = 0; n < node_count; n++) {
+        for (uint16_t n = done_count; n < node_count; n++) {
             if (should_split[n] && new_node_count <= max_nodes - 3) {
 
                 // child with the most data is going to derive stats by subtraction

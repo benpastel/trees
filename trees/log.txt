@@ -280,7 +280,6 @@ predict xgboost...
       train: MSE: 4.44, MAE: 0.83
       valid: MSE: 4.46, MAE: 0.83
 
-
 Params(smooth_factor=100.0, weight_smooth_factor=100.0, max_nodes=3280, max_depth=8, tree_count=100, learning_rate=0.3, third_split_penalty=4.0, bucket_count=64, bucket_sample_count=10000, trees_per_bucketing=2): train our tree ...
 (149.0s)
 Regression model with 100 trees with sizes min=628 max=3280 mean=1692.85
