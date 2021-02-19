@@ -472,7 +472,7 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 //
                 // aggregate a buffer within each thread
                 // once full, copy it into memberships
-                #pragma omp parallel
+                #pragma omp parallel num_threads(14)
                 {
                     uint32_t left_buf [SPLIT_BUF_SIZE];
                     uint32_t mid_buf  [SPLIT_BUF_SIZE];
@@ -553,9 +553,9 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                     }
                 }
             }
-            // done with the parent now
-            free(memberships[n]);
-            memberships[n] = NULL;
+            // // done with the parent now
+            // free(memberships[n]);
+            // memberships[n] = NULL;
         }
 
         done_count = node_count;
@@ -573,15 +573,26 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // calculate the mean at each leaf node & predictions
     #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
-        // write predictions for non-empty leaves only
-        if (!node_counts[n] || left_childs[n]) continue;
+        if (!node_counts[n]) continue;
+        node_means[n] = node_sums[n] / (node_counts[n] + weight_smooth_factor);
+    }
 
-        double mean = node_sums[n] / (node_counts[n] + weight_smooth_factor);
+    #pragma omp parallel for
+    for (uint16_t n = node_count; n >= 0; n--) {
+        // skip empty nodes
+        if (!node_counts[n]) continue;
+        // if (!node_counts[n] || left_childs[n]) continue;
+
+        double parent_mean = node_means[node_parents[n]];
+        double child_mean = node_means[n];
+        double mean = 0.5 * parent_mean + 0.5 * child_mean;
+
+        node_means[n] = mean;
+
         for (uint32_t i = 0; i < node_counts[n]; i++) {
             uint32_t r = memberships[n][i];
             preds[r] = mean;
         }
-        node_means[n] = mean;
 
         free(memberships[n]);
         memberships[n] = NULL;
