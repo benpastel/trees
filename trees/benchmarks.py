@@ -321,21 +321,21 @@ if __name__ == '__main__':
     else:
       print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
-    with timed(f'train xgboost with: {xgboost_args}...'):
-      if is_regression:
-        model = xgb.XGBRegressor(**xgboost_args)
-      else:
-        model = xgb.XGBClassifier(**xgboost_args)
-      model.fit(train_X, train_y)
+    # with timed(f'train xgboost with: {xgboost_args}...'):
+    #   if is_regression:
+    #     model = xgb.XGBRegressor(**xgboost_args)
+    #   else:
+    #     model = xgb.XGBClassifier(**xgboost_args)
+    #   model.fit(train_X, train_y)
 
-    with timed(f'predict xgboost...'):
-      train_preds = model.predict(train_X)
-      valid_preds = model.predict(valid_X)
-    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    del model
-    del train_preds
-    del valid_preds
-    gc.collect()
+    # with timed(f'predict xgboost...'):
+    #   train_preds = model.predict(train_X)
+    #   valid_preds = model.predict(valid_X)
+    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    # del model
+    # del train_preds
+    # del valid_preds
+    # gc.collect()
 
     with timed(f'\n{tree_params}: train our tree ...'):
       # with profiled():

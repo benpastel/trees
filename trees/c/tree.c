@@ -554,8 +554,8 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
                 }
             }
             // done with the parent now
-            free(memberships[n]);
-            memberships[n] = NULL;
+            // free(memberships[n]);
+            // memberships[n] = NULL;
         }
 
         done_count = node_count;
@@ -573,15 +573,35 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
     // calculate the mean at each leaf node & predictions
     #pragma omp parallel for
     for (uint16_t n = 0; n < node_count; n++) {
-        // write predictions for non-empty leaves only
-        if (!node_counts[n] || left_childs[n]) continue;
+        // skip empty nodes
+        if (!node_counts[n]) continue;
 
-        double mean = node_sums[n] / (node_counts[n] + weight_smooth_factor);
-        for (uint32_t i = 0; i < node_counts[n]; i++) {
-            uint32_t r = memberships[n][i];
-            preds[r] = mean;
+        double parent_mean;
+        if (n > 0) {
+            // smooth with contributions from the parent node
+            // as if we had "weight_smooth_factor" copies at the parent
+            parent_mean = node_means[node_parents[n]];
+        } else {
+            // for the root, skip parent smoothing by using the root's mean
+            parent_mean = node_sums[0] / node_counts[0];
         }
-        node_means[n] = mean;
+
+        double effective_sum = node_sums[n] + (parent_mean * weight_smooth_factor);
+        double effective_count = node_counts[n] + weight_smooth_factor;
+        node_means[n] = effective_sum / effective_count;
+
+        if (node_counts[n] == 1) {
+            uint32_t r = memberships[n][0];
+            preds[r] = node_means[n];
+        } else {
+            for (uint32_t i = 0; i < node_counts[n]; i++) {
+                uint32_t r = memberships[n][i];
+
+                // de-bias by removing this row's contribution to the mean
+                // preds[r] = (effective_sum - y[r]) / (effective_count - 1);
+                preds[r] = node_means[n];
+            }
+        }
 
         free(memberships[n]);
         memberships[n] = NULL;
