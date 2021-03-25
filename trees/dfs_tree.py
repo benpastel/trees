@@ -32,14 +32,10 @@ def fit_tree(
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
   assert 0 < cols < 2**32-1, 'cols must fit in uint32'
 
-  # check if depth constraint imposes a tighter max_nodes
-  max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
-  max_nodes = min(params.max_nodes, max_nodes_from_depth)
-  assert 0 < max_nodes < 2**16, 'max_nodes must fit in uint16'
-  assert 0 < cols * max_nodes * params.bucket_count < 2**64-1, 'histograms indices must fit in uint64'
+  # ignore bfs params and use fewer max nodes
+  max_nodes = 64
+  assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
 
-  # output arrays for c function
-  # pre-allocated to the max number of nodes
   split_cols = np.zeros(max_nodes, dtype=np.uint64)
   split_lo_bins = np.zeros(max_nodes, dtype=np.uint8)
   split_hi_bins = np.zeros(max_nodes, dtype=np.uint8)
@@ -49,22 +45,25 @@ def fit_tree(
   node_means = np.zeros(max_nodes, dtype=np.double)
   preds = np.zeros(rows, dtype=np.double)
 
-  node_count = build_dfs_tree(
-    X,
-    y,
-    split_cols,
-    split_lo_bins,
-    split_hi_bins,
-    left_children,
-    mid_children,
-    right_children,
-    node_means,
-    preds,
-    params.smooth_factor,
-    params.weight_smooth_factor,
-    params.max_depth,
-    params.third_split_penalty,
-    params.bucket_count)
+  # row => node it belongs to
+  memberships = np.zeros(rows, dtype=np.uint16)
+
+  hists = init_histograms(X, y, max_nodes)
+
+  for node_count in range(max_nodes):
+    split_n, split_c = choose_split_column(hists)
+
+    split_lo, split_hi = choose_split_values(hists, split_n, split_c)
+
+    # TODO update node metadata (children, parents) here
+    split_cols[split_n] = split_c
+    split_lo_bins[split_n] = split_lo
+    split_hi_bins[split_n] = split_hi
+
+    new_mean = split(preds, memberships, some_other_metadata)
+
+    # TODO update hists here
+
 
   # convert the splits from binned uint8 values => original float32 values
   split_lo_vals = np.zeros(node_count, dtype=np.float32)
