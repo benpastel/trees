@@ -314,7 +314,7 @@ if __name__ == '__main__':
     print(f'X.shape: train {train_X.shape}, valid {valid_X.shape}')
 
     # only handle regression or binary classification cases so far
-    is_regression = (train_y.dtype != np.bool)
+    is_regression = (train_y.dtype != np.bool_)
 
     if is_regression:
       print(f'regression targets with min={np.min(train_y):.1f}, max={np.max(train_y):.1f}, mean={np.mean(train_y):.1f}')

@@ -3,7 +3,7 @@ import pprint
 
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from trees.tree import fit_tree, eval_tree, Tree
+from trees.bfs_tree import fit_tree, eval_tree, Tree
 from trees.params import Params
 
 

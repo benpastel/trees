@@ -581,7 +581,23 @@ static PyObject* build_tree(PyObject *dummy, PyObject *args)
             uint32_t r = memberships[n][i];
             preds[r] = mean;
         }
+
         node_means[n] = mean;
+
+        // TODO: de-bias by removing this row's contribution from its own prediction
+        // and update tests
+        // like this:
+        //
+        // node_means[n] = node_sums[n] / (node_counts[n] + weight_smooth_factor);
+        // if (node_counts[n] == 1) {
+        //     uint32_t r = memberships[n][0];
+        //     preds[r] = node_means[n];
+        // } else {
+        //     for (uint32_t i = 0; i < node_counts[n]; i++) {
+        //         uint32_t r = memberships[n][i];
+        //         preds[r] = (node_sums[n] - y[r]) / (node_counts[n] - 1 + weight_smooth_factor);
+        //     }
+        // }
 
         free(memberships[n]);
         memberships[n] = NULL;

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import numpy as np
 from scipy.stats import chi2
 
 from trees.params import Params
-from trees.tree import Tree, fit_tree, eval_tree
+from trees.bfs_tree import Tree, fit_tree, eval_tree
 from trees.c.tree import apply_bins as c_apply_bins
 from trees.utils import timed
 
@@ -106,27 +106,31 @@ def fit(
     X: np.ndarray,
     y: np.ndarray,
     params: Params
-) -> Model:
+) -> Tuple[Model, np.ndarray]:
   rows, feats = X.shape
   assert y.shape == (rows,)
   assert 2 <= params.bucket_count <= 256
   assert 0 < params.bucket_sample_count
   assert 0 < params.trees_per_bucketing
-  targets_are_float = (y.dtype != np.bool)
+  targets_are_float = (y.dtype != np.bool_)
 
   X = X.astype(np.float32, copy=False)
   y = y.astype(np.double, copy=False)
-  mean_y = np.mean(y)
+  mean_y = float(np.mean(y))
   preds = np.full(rows, mean_y, dtype=np.double)
 
   bins = None
   bin_X = None
 
-  trees = []
+  trees: List[Tree] = []
   for t in range(params.tree_count):
     if (t % params.trees_per_bucketing) == 0:
       bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
       bin_X = apply_bins(X, bins)
+
+    # for linter
+    assert bin_X is not None
+    assert bins is not None
 
     target = params.learning_rate * (y - preds)
 
