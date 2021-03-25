@@ -12,7 +12,7 @@ test: build
 	python -m pytest
 
 run: build test
-	python -m trees.benchmarks
+	TREE_COUNT=$(TREE_COUNT) python -m trees.benchmarks
 
 disassemble:
 	objdump -S --disassemble $(COMPILED_C_FILE) | subl
