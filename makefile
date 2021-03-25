@@ -1,4 +1,4 @@
-COMPILED_C_FILE := trees/c/tree.cpython-38-darwin.so
+COMPILED_C_FILE := trees/c/bfs_tree.cpython-38-darwin.so
 TREE_COUNT ?= 10
 
 lint:

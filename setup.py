@@ -1,6 +1,6 @@
 from distutils.core import setup, Extension
 
-c_module = Extension('tree', sources=['trees/c/tree.c'],
+c_module = Extension('bfs_tree', sources=['trees/c/bfs_tree.c'],
   include_dirs=[
     '/usr/local/lib',
     '/usr/local/lib/python3.8/site-packages/numpy/core/include/numpy/'],

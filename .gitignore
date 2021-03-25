@@ -7,4 +7,4 @@ data/
 # TODO clean up build situation
 trees/c/build/
 trees/c/*.so
-trees/c/trees/c/tree.o
+trees/c/trees/c/*.o

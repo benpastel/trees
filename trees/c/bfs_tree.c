@@ -823,7 +823,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
 static struct PyModuleDef mod_def =
 {
     PyModuleDef_HEAD_INIT,
-    "tree",
+    "bfs_tree",
     "",
     -1,
     Methods
