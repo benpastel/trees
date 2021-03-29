@@ -9,7 +9,6 @@ from trees.c.tree import build_dfs_tree
 from trees.bfs_tree import Tree, eval_tree
 
 # evaluation is the same as bfs_tree
-# TODO move to shared location
 assert eval_tree
 
 def calc_histograms(
@@ -21,6 +20,7 @@ def calc_histograms(
     hist_sums: np.ndarray,
     hist_sum_sqs: np.ndarray
   ) -> None:
+  # will be C
   nodes, cols, vals = hist_counts.shape
   rows, _ = X.shape
   assert hist_counts.shape == hist_sums.shape == hist_sum_sqs.shape
@@ -37,6 +37,82 @@ def calc_histograms(
       hist_sums[0][c][v] = np.sum(y[matching_rows])
       hist_sum_sqs[0][c][v] = np.sum(y[matching_rows] * y[matching_rows])
 
+def choose_split(
+  counts: np.ndarray,
+  sums: np.ndarray,
+  sum_sqs: np.ndarray,
+  penalty: float,
+  third_split_penalty: float
+) -> Tuple[float, int, int]:
+  '''
+  return (score, lo_split_val, hi_split_val)
+
+  python-only interface
+  '''
+
+  assert len(counts.shape) == 1
+  assert counts.shape == sums.shape == sum_sqs.shape
+  rows, = counts.shape
+
+  total_count = counts.sum()
+  total_sum = sums.sum()
+  total_sum_sqs = sum_sqs.sum()
+
+  left_count = 0
+  left_sum = 0
+  left_sum_sqs = 0
+
+  best_score = np.inf
+  best_lo = -1
+  best_hi = -1
+
+  for lo in range(vals-2):
+    left_count += counts[lo]
+    left_sum += sums[lo]
+    left_sum_sqs += sum_sqs[lo]
+
+    # force non-empty left split
+    if left_count == 0: continue
+
+    left_var = left_sum_sqs - (left_sum * left_sum / left_count)
+
+    mid_count = 0
+    mid_sum = 0
+    mid_sum_sqs = 0
+
+    for hi in range(lo, vals-1):
+      if (hi > lo):
+        # middle split is nonempty
+        # penalize it by a factor
+        split_penalty = penalty + third_split_penalty * penalty
+
+        mid_count += counts[hi]
+        mid_sum += sums[hi]
+        mid_sum_sq += sum_sqs[hi]
+      else:
+        # middle split is empty
+        split_penalty = penalty
+
+      right_count = total_count - left_count - mid_count
+      right_sum = total_sum - left_sum - mid_sum
+      right_sum_sq = total_sum_sqs - left_sum_sq - mid_sum_sq
+
+      # force non-empty right split
+      if (right_count == 0): break
+
+      # score is weighted average of splits' variance
+      mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count)
+      right_var = right_sum_sq - (right_sum * right_sum / right_count)
+      score = (left_var + mid_var + right_var + split_penalty) / total_count
+
+      if score < best_score:
+        best_score = score
+        best_lo = lo
+        best_hi = hi
+
+  assert best_lo >= 0
+  return best_score, best_lo, best_hi
+
 
 def calc_node_scores(
     n: int,
@@ -47,58 +123,93 @@ def calc_node_scores(
     penalty: float,
     third_split_penalty: float
   ) -> None:
+  # will be in C
   nodes, cols, vals = counts.shape
   assert scores.shape == (nodes, cols)
   assert counts.shape == sums.shape == sum_sqs.shape
-  assert n < nodes
+  assert 0 <= n < nodes
 
   for c in range(cols):
-    total_count = counts[n,c,:].sum()
-    total_sum = sums[n,c,:].sum()
-    total_sum_sqs = sum_sqs[n,c,:].sum()
+    score, _, _ = choose_split(
+      counts[n,c],
+      sums[n,c],
+      sum_sqs[n,c],
+      penalty,
+      third_split_penalty
+    )
+    scores[n, c] = score
 
-    left_count = 0
-    left_sum = 0
-    left_sum_sqs = 0
 
-    for lo in range(vals-2):
-      left_count += counts[n,c,lo]
-      left_sum += sums[n,c,lo]
-      left_sum_sqs += sum_sqs[n,c,lo]
+def best_split_values(
+    n: int,
+    c: int,
+    counts: np.ndarray,
+    sums: np.ndarray,
+    sum_sqs: np.ndarray,
+    penalty: float,
+    third_split_penalty: float
+  ) -> None:
+  # will be in C
+  nodes, cols, vals = counts.shape
+  assert counts.shape == sums.shape == sum_sqs.shape
+  assert 0 <= n < nodes
+  assert 0 <= c < cols
 
-      # force non-empty left split
-      if left_count == 0: continue
+  score, lo, hi = choose_split(
+    counts[n,c],
+    sums[n,c],
+    sum_sqs[n,c],
+    penalty,
+    third_split_penalty
+  )
+  scores[n, c] = score
 
-      left_var = left_sum_sqs - (left_sum * left_sum / left_count)
 
-      mid_count = 0
-      mid_sum = 0
-      mid_sum_sqs = 0
+def update_memberships(
+    c: int,
+    parent: int,
+    left_child: int,
+    mid_child: int,
+    right_child: int,
+    lo: int,
+    hi: int,
+    X: np.ndarray,
+    memberships: np.ndarray
+) -> None:
+  rows, cols = X.shape
+  assert memberships.shape == (rows,)
+  assert left_child < right_child
+  assert mid_child == 0 or (left_child < mid_child < right_child)
+  assert lo <= hi
+  assert 0 <= c < cols
 
-      for hi in range(lo, vals-1):
-        if (hi > lo):
-          # middle split is nonempty
-          # penalize it by a factor
-          split_penalty = penalty + third_split_penalty * penalty
+  split_vals = X[memberships == parent, c]
 
-          mid_count += counts[n,c,hi]
-          mid_sum += sums[n,c,hi]
-          mid_sum_sq += sum_sqs[n,c,hi]
-        else:
-          # middle split is empty
-          split_penalty = penalty
+  new_vals = np.zeros(len(split_vals), dtype=memberships.dtype)
+  new_vals[split_vals <= lo] = left_child
+  new_vals[lo < split_vals <= hi] = mid_child
+  new_vals[hi < split_vals] = right_child
 
-        right_count = total_count - left_count - mid_count
-        right_sum = total_sum - left_sum - mid_sum
-        right_sum_sq = total_sum_sqs - left_sum_sq - mid_sum_sq
+  memberships[memberships == parent] = new_vals
 
-        # force non-empty right split
-        if (right_count == 0): break
 
-        # score is weighted average of splits' variance
-        mid_var = (mid_count == 0) ? 0 : mid_sum_sq - (mid_sum * mid_sum / mid_count)
-        right_var = right_sum_sq - (right_sum * right_sum / right_count)
-        scores[n, c] = (left_var + mid_var + right_var + split_penalty) / total_count
+def subtract_histograms(
+    target_node: int,
+    parent_node: int,
+    source_node_1: int,
+    source_node_2: int,
+    hist_counts: np.ndarray,
+    hist_sums: np.ndarray,
+    hist_sum_sqs: np.ndarray
+  ) -> None:
+  nodes, cols, vals = counts.shape
+  assert counts.shape == sums.shape == sum_sqs.shape
+  assert 0 <= parent_node < target_node < nodes
+  assert parent_node < source_node_1 < nodes
+  assert parent_node < source_node_2 < nodes
+  hist_counts[target_node] = hist_counts[parent_node] - hist_counts[source_node_1] - hist_counts[source_node_2]
+  hist_sums[target_node] = hist_sums[parent_node] - hist_sums[source_node_1] - hist_sums[source_node_2]
+  hist_sum_sqs[target_node] = hist_sum_sqs[parent_node] - hist_sum_sqs[source_node_1] - hist_sum_sqs[source_node_2]
 
 
 def fit_tree(
@@ -130,7 +241,7 @@ def fit_tree(
   left_children = np.zeros(max_nodes, dtype=np.uint16)
   mid_children = np.zeros(max_nodes, dtype=np.uint16)
   right_children = np.zeros(max_nodes, dtype=np.uint16)
-  node_means = np.zeros(max_nodes, dtype=np.float64)
+  node_counts = np.zeros(max_nodes, dtype=np.uint64)
 
   # row => node it belongs to
   # initially belong to root (0)
@@ -148,10 +259,12 @@ def fit_tree(
   hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
   hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
 
+  # root histogram
   calc_histograms(0, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
 
+  # root count & variance
   assert hist_counts[0,:,:].sum() == rows
-
+  node_counts[0] = rows
   root_sum = hist_sums[0,:,:].sum()
   root_sum_sqs = hist_sum_sqs[0,:,:].sum()
   root_var = (root_sum_sq / rows) - (root_sum / rows) * (root_sum / rows);
@@ -168,28 +281,94 @@ def fit_tree(
     penalty
   )
 
-  for node_count in range(max_nodes):
+  node_count = 1
+  while node_count + 3 <= max_nodes:
+    # can add 3 children and not have too many nodes
+
+    # choose the node & column with the highest score
     # can split leaves with enough data
-    can_split_node = (node_counts > 1) & (left_children != 0)
-    scores[~can_split_node] = np.inf # TODO max float
-    split_n, split_c = argmax(scores[can_split_node]) # ravel
+    can_split_node = (node_counts > 2) & (left_children != 0)
+    scores[~can_split_node] = np.inf
+    split_n, split_c = np.unravel_index(np.argmin(scores), scores.shape)
 
-    # TODO LEFT OFF HERE (and didn't test anything)
+    # now choose which values to split on for that node & column
+    # recompute for now because of the sampling idea
+    score, split_lo, split_hi = best_split_values(
+      split_n,
+      split_c,
+      hist_counts,
+      hist_sums,
+      hist_sum_sqs,
+      penalty,
+      third_split_penalty
+    )
 
-    split_lo, split_hi, score = best_split_values(hists, split_n, split_c)
+    if score >= root_var:
+      break
+      # TODO parent score
 
-    # TODO update node metadata (children, parents) here
+    # make the split
+    # update node metadata
     split_cols[split_n] = split_c
     split_lo_bins[split_n] = split_lo
     split_hi_bins[split_n] = split_hi
 
-    new_mean = split(X, preds, memberships)
+    if split_lo == split_hi:
+      left_children[split_n] = node_count
+      right_children[split_n] = node_count + 1
+      node_count += 2
+    else:
+      left_children[split_n] = node_count
+      mid_children[split_n] = node_count + 1
+      right_children[split_n] = node_count + 2
+      node_count += 3
 
-    # TODO update hists here
+    # split the data
+    # by updating which row belongs to which node
+    update_memberships(
+      split_c,
+      split_n,
+      left_children[split_n],
+      mid_children[split_n],
+      right_children[split_n],
+      split_lo,
+      split_hi,
+      X,
+      memberships
+    )
 
+    # update counts
+    # TODO variance too here
+    node_counts[left_children[split_n]] = np.count_nonzero(memberships == left_children[split_n])
+    node_counts[mid_children[split_n]] = np.count_nonzero(memberships == mid_children[split_n])
+    node_counts[right_children[split_n]] = np.count_nonzero(memberships == right_children[split_n])
+
+    # update histograms
+    # smallest 2 splits are calculated
+    # then largest is via subtraction
+    if (node_counts[right_children[split_n]] > node_counts[left_children[split_n]] and
+      node_counts[right_children[split_n]] > node_counts[mid_children[split_n]]):
+      calc_histograms(left_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      if lo != hi:
+        calc_histograms(mid_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      subtract_histograms(right_children[split_n], split_n, left_children[split_n], mid_children[split_n], hist_counts, hist_sums, hist_sum_sqs)
+    elif (lo == hi or
+      (node_counts[left_children[split_n]] > node_counts[mid_children[split_n]] and
+      node_counts[left_children[split_n]] > node_counts[right_children[split_n]])):
+      calc_histograms(right_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      if lo != hi:
+        calc_histograms(mid_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      subtract_histograms(left_children[split_n], split_n, right_children[split_n], mid_children[split_n], hist_counts, hist_sums, hist_sum_sqs)
+    else:
+      calc_histograms(left_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      calc_histograms(right_children[split_n], memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      subtract_histograms(mid_children[split_n], split_n, left_children[split_n], right_children[split_n], hist_counts, hist_sums, hist_sum_sqs)
 
   # prediction for each row is the mean of the node the row is in
-  # TODO de-bias
+  # (TODO de-bias)
+  node_means = np.zeros(node_count)
+  for n in range(node_count):
+    node_means[n] = np.mean(y[memberships == n])
   preds = node_means[memberships]
 
   # convert the splits from binned uint8 values => original float32 values
@@ -208,6 +387,6 @@ def fit_tree(
     left_children[:node_count],
     mid_children[:node_count],
     right_children[:node_count],
-    node_means[:node_count]
+    node_means
   ), preds
 
