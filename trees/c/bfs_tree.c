@@ -24,7 +24,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 1
+#define VERBOSE 0
 
 #define SPLIT_BUF_SIZE 1024
 #define MIN_PARALLEL_SPLIT 1024
@@ -786,23 +786,27 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     // such that (floats in bucket 0) <= bins[c, 0] < (floats in bucket 1) <= bins[c, 1] ...
     //
     // out may be 0-initialized, or it may contain an old binning
+    // if out contains an old binning, the new binning may be similar
+    // so the out[i] we want is usually close to the current out[i], and linear search is best
+    //
+    // if we wanted to super-optimize this, we'd handle the 0-initialized case differently
+    // (e.g. one round of binary search and then linear, and don't need "search downwards")
+    // but it only happens on the first tree
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         for (uint64_t c = 0; c < cols; c++) {
-            uint64_t idx = r*cols + c;
-            float val = X[idx];
+            uint64_t i = r*cols + c;
+            float val = X[i];
 
-            // if out contains an old binning, the new binning may be similar
-
-            // truncate old value to allowed range
-            if (out[idx] >= vals) out[idx] = vals - 1;
-
-            // if too large, search downward
-            while (out[idx] > 0 && val < bins[c*splits + out[idx] - 1]) out[idx]--;
+            // truncate to allowed range
+            if (out[i] >= vals) out[i] = vals - 1;
 
             // if too small, search upward
-            while (out[idx] < vals - 1 && val > bins[c*splits + out[idx]]) out[idx]++;
+            while (out[i] < vals - 1 && val > bins[c*splits + out[i]]) out[i]++;
+
+            // if too large, search downward
+            while (out[i] > 0 && val < bins[c*splits + out[i] - 1]) out[i]--;
         }
     }
     gettimeofday(&loop_stop, NULL);
