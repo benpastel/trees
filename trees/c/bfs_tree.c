@@ -24,7 +24,7 @@ static float msec(struct timeval t0, struct timeval t1)
     return (t1.tv_sec - t0.tv_sec) * 1000.0f + (t1.tv_usec - t0.tv_usec) / 1000.0f;
 }
 
-#define VERBOSE 0
+#define VERBOSE 1
 
 #define SPLIT_BUF_SIZE 1024
 #define MIN_PARALLEL_SPLIT 1024
@@ -795,16 +795,14 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
 
             // if out contains an old binning, the new binning may be similar
 
-            // start at the old value (unless it's out of range)
-            uint8_t b = out[idx] >= vals ? vals - 1 : out[idx];
+            // truncate old value to allowed range
+            if (out[idx] >= vals) out[idx] = vals - 1;
 
             // if too large, search downward
-            while (b > 0 && val < bins[c*splits + b - 1]) b--;
+            while (out[idx] > 0 && val < bins[c*splits + out[idx] - 1]) out[idx]--;
 
             // if too small, search upward
-            while (b < vals - 1 && val > bins[c*splits + b]) b++;
-
-            out[idx] = b;
+            while (out[idx] < vals - 1 && val > bins[c*splits + out[idx]]) out[idx]++;
         }
     }
     gettimeofday(&loop_stop, NULL);
