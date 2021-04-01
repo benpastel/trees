@@ -4,7 +4,6 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
-from trees.c.tree import build_dfs_tree
 
 from trees.bfs_tree import Tree, eval_tree
 

@@ -6,7 +6,7 @@ from scipy.stats import chi2
 
 from trees.params import Params
 from trees.bfs_tree import Tree, fit_tree, eval_tree
-from trees.c.tree import apply_bins as c_apply_bins
+from trees.c.bfs_tree import apply_bins as c_apply_bins
 from trees.utils import timed
 
 
@@ -85,7 +85,14 @@ def apply_bins(
   X: np.ndarray,
   bins: np.ndarray
 ) -> np.ndarray:
-  ''' returns X bucketed into the splits '''
+  '''
+  calculates X bucketed into the splits
+
+  writes the output to out_bin_X
+
+  the caller should put the old values in out_bin_X when
+
+  '''
   rows, cols = X.shape
   splits = bins.shape[1]
   assert bins.ndim == 2

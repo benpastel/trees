@@ -14,5 +14,5 @@ c_module = Extension('bfs_tree', sources=['trees/c/bfs_tree.c'],
     extra_link_args = ['-lomp']
   )
 
-setup(name='tree', ext_modules=[c_module])
+setup(name='bfs_tree', ext_modules=[c_module])
 

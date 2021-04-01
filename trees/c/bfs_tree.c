@@ -830,7 +830,7 @@ static struct PyModuleDef mod_def =
 };
 
 PyMODINIT_FUNC
-PyInit_tree(void)
+PyInit_bfs_tree(void)
 {
     import_array();
     return PyModule_Create(&mod_def);
