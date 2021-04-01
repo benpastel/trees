@@ -26,7 +26,8 @@ def test_apply_bins():
     [3],
     [4]
   ], dtype=np.float32)
-  actual = apply_bins(X, bins)
+  actual = np.zeros((5, 1), dtype=np.uint8)
+  apply_bins(X, bins, actual)
   assert_array_almost_equal(actual, [
     [0],
     [0],

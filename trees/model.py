@@ -83,15 +83,14 @@ def choose_bins(
 
 def apply_bins(
   X: np.ndarray,
-  bins: np.ndarray
-) -> np.ndarray:
+  bins: np.ndarray,
+  out_bin_X: np.ndarray
+) -> None:
   '''
-  calculates X bucketed into the splits
+  calculates X bucketed into the splits, writing the output to out_bin_X
 
-  writes the output to out_bin_X
-
-  the caller should put the old values in out_bin_X when
-
+  the caller should put old values in out_bin_X if they exist; these will be used as
+  optimization hints to speed up the computation
   '''
   rows, cols = X.shape
   splits = bins.shape[1]
@@ -99,14 +98,13 @@ def apply_bins(
   assert bins.shape[0] == cols
   assert X.dtype == np.float32
   assert bins.dtype == np.float32
+  assert out_bin_X.shape == (rows, cols)
+  assert out_bin_X.dtype == np.uint8
 
-  bin_X = np.zeros((rows, cols), dtype=np.uint8)
+  c_apply_bins(X, bins, out_bin_X)
 
-  c_apply_bins(X, bins, bin_X)
+  assert np.all(out_bin_X < splits+1)
 
-  assert np.all(bin_X < splits+1)
-
-  return bin_X
 
 
 def fit(
@@ -127,13 +125,13 @@ def fit(
   preds = np.full(rows, mean_y, dtype=np.double)
 
   bins = None
-  bin_X = None
+  bin_X = np.zeros((rows, feats), dtype=np.uint8)
 
   trees: List[Tree] = []
   for t in range(params.tree_count):
     if (t % params.trees_per_bucketing) == 0:
       bins = choose_bins(X, params.bucket_count, params.bucket_sample_count)
-      bin_X = apply_bins(X, bins)
+      apply_bins(X, bins, bin_X)
 
     # for linter
     assert bin_X is not None

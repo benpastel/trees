@@ -785,6 +785,7 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
     //
     // such that (floats in bucket 0) <= bins[c, 0] < (floats in bucket 1) <= bins[c, 1] ...
     //
+    // out may be 0-initialized, or it may contain an old binning
     gettimeofday(&loop_start, NULL);
     #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
@@ -792,14 +793,15 @@ static PyObject* apply_bins(PyObject *dummy, PyObject *args)
             uint64_t idx = r*cols + c;
             float val = X[idx];
 
-            // shortcut the 0 case because it's common (val <= bins[c*splits)
-            // since out was 0-initialized, we can just skip
-            if (val <= bins[c*splits]) continue;
+            // if out contains an old binning, the new binning may be similar
 
-            // single round of binary search
-            uint8_t b = val <= bins[c*splits + splits/2] ? 1 : splits/2 + 1;
+            // start at the old value (unless it's out of range)
+            uint8_t b = out[idx] >= vals ? vals - 1 : out[idx];
 
-            // now linear search
+            // if too large, search downward
+            while (b > 0 && val < bins[c*splits + b - 1]) b--;
+
+            // if too small, search upward
             while (b < vals - 1 && val > bins[c*splits + b]) b++;
 
             out[idx] = b;
