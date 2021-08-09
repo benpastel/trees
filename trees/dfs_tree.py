@@ -3,6 +3,8 @@ from typing import Optional, List, Tuple
 
 import numpy as np
 
+from trees.params import Params
+
 
 def variance(
     sum_sqs: float,
@@ -136,16 +138,16 @@ def _best_col_split(
 
     left_var = variance(left_sum_sq, left_sum, left_count)
     right_var = variance(right_sum_sq, right_sum, right_count)
-    gain = calc_gain(left_var, right_var, parent_var, left_count, right_count, parent_count)
+    gain = calc_gain(left_var, right_var, parent_var, left_count, right_count, total_count)
 
     if gain > best_gain:
       best_gain = float(gain)
       best_bin = b
 
-  return best_score, best_bin
+  return best_gain, best_bin
 
 
-def update_best_splits(
+def update_node_splits(
     n: int,
 
     hist_counts: np.ndarray,
@@ -169,9 +171,9 @@ def update_best_splits(
 
   for c in range(cols):
     gain, split_bin = _best_col_split(
-      counts[n,c],
-      sums[n,c],
-      sum_sqs[n,c],
+      hist_counts[n,c],
+      hist_sums[n,c],
+      hist_sum_sqs[n,c],
     )
     if gain > node_gains[n]:
       node_gains[n] = gain
@@ -187,7 +189,7 @@ def update_memberships_and_counts(
     split_val: int,
     X: np.ndarray,
     memberships: np.ndarray,
-    counts: np.ndarray
+    node_counts: np.ndarray
 ) -> None:
   # will be in C
   rows, cols = X.shape
@@ -258,7 +260,7 @@ def fit_tree(
   update_histograms(0, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
 
   # root node
-  update_best_splits(
+  update_node_splits(
     0,
     hist_counts,
     hist_sums,
@@ -308,17 +310,17 @@ def fit_tree(
       update_histograms(left_child, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
 
       # find right via subtraction
-      counts[right_child] = counts[parent_node] - counts[left_child]
-      sums[right_child] = sums[parent_node] - sums[left_child]
-      sum_sqs[right_child] = sum_sqs[parent_node] - sum_sqs[left_child]
+      hist_counts[right_child] = hist_counts[split_n] - hist_counts[left_child]
+      hist_sums[right_child] = hist_sums[split_n] - hist_sums[left_child]
+      hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
     else:
       # calculate right
       update_histograms(right_child, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
 
       # find left via subtraction
-      counts[left_child] = counts[parent_node] - counts[right_child]
-      sums[left_child] = sums[parent_node] - sums[right_child]
-      sum_sqs[left_child] = sum_sqs[parent_node] - sum_sqs[right_child]
+      hist_counts[left_child] = hist_counts[split_n] - hist_counts[right_child]
+      hist_sums[left_child] = hist_sums[split_n] - hist_sums[right_child]
+      hist_sum_sqs[left_child] = hist_sum_sqs[split_n] - hist_sum_sqs[right_child]
 
     # find the best splits for each new node
     update_node_splits(
@@ -396,7 +398,6 @@ def c_eval_tree(
 
     # the predicted value is the mean of the leaf we ended up in
     out_vals[r] = node_means[n]
-  return out_vals
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
