@@ -14,7 +14,7 @@ def variance(
   assert count > 0
   # TODO will need to inline
   # TODO bessel's correction?
-  return (sum_sqs + (sum_ + sum_) / count) / count
+  return (sum_sqs - (sum_ * sum_) / count) / count
 
 
 def calc_gain(
@@ -78,13 +78,14 @@ def update_histograms(
   assert memberships.shape == (rows,)
 
   X_in_node = X[memberships == n]
+  y_in_node = y[memberships == n]
 
   for c in range(cols):
     for v in range(vals):
-      matching_rows = (X_in_node[:, c] == v)
-      hist_counts[n,c,v] = np.count_nonzero(matching_rows)
-      hist_sums[n,c,v] = np.sum(y[matching_rows])
-      hist_sum_sqs[n,c,v] = np.sum(y[matching_rows] * y[matching_rows])
+      matching_y = y_in_node[X_in_node[:, c] == v]
+      hist_counts[n,c,v] = len(matching_y)
+      hist_sums[n,c,v] = matching_y.sum()
+      hist_sum_sqs[n,c,v] = np.sum(matching_y * matching_y)
 
 
 def _best_col_split(
@@ -113,6 +114,7 @@ def _best_col_split(
     return -np.inf, None
 
   parent_var = variance(total_sum_sq, total_sum, total_count)
+  print(f"  parent:{parent_var}")
 
   left_count = 0
   left_sum = 0
@@ -139,6 +141,7 @@ def _best_col_split(
     left_var = variance(left_sum_sq, left_sum, left_count)
     right_var = variance(right_sum_sq, right_sum, right_count)
     gain = calc_gain(left_var, right_var, parent_var, left_count, right_count, total_count)
+    print(f"  b={b}: {left_var} ({left_sum_sq}, {left_sum}, {left_count}), {right_var} ({right_sum_sq}, {right_sum}, {right_count}), {gain}")
 
     if gain > best_gain:
       best_gain = float(gain)
@@ -170,6 +173,7 @@ def update_node_splits(
   assert 0 < cols
 
   for c in range(cols):
+    print(f"c={c}")
     gain, split_bin = _best_col_split(
       hist_counts[n,c],
       hist_sums[n,c],
@@ -280,7 +284,9 @@ def fit_tree(
     can_split_node = (node_counts >= 2) & (left_children == 0)
     node_gains[~can_split_node] = -np.inf
 
-    if node_gains.max() < 0:
+    print(f"best gain: {node_gains.max()}")
+
+    if node_gains.max() <= 0:
       # can't improve anymore
       # TODO plus a splitting penalty
       break
@@ -288,6 +294,8 @@ def fit_tree(
     split_n = np.argmax(node_gains)
     split_c = split_cols[split_n]
     split_bin = split_bins[split_n]
+
+    print(f"split: {split_n, split_c, split_bin}")
 
     # make the split
     left_children[split_n] = left_child = node_count
@@ -349,7 +357,8 @@ def fit_tree(
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
   for n in range(node_count):
-    node_means[n] = np.mean(y[memberships == n])
+    if np.any(memberships == n):
+      node_means[n] = np.mean(y[memberships == n])
   preds = node_means[memberships]
 
   # convert the splits from binned uint8 values => original float32 values

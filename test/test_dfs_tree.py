@@ -3,9 +3,13 @@ import pprint
 
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from trees.dfs_tree import fit_tree, eval_tree, Tree
+from trees.dfs_tree import fit_tree, eval_tree, Tree, variance
 from trees.params import Params
 
+
+def test_variance():
+
+  assert variance(8, 4, 2) == 0
 
 def test_fit_tree_simple():
   pp = pprint.PrettyPrinter(indent=4)
@@ -18,15 +22,16 @@ def test_fit_tree_simple():
   #
   X = np.array([
     [0, 2],
-    [1, 1],
-    [2, 4],
+    [1, 4],
+    [2, 1],
     [3, 3],
   ], dtype=np.uint8)
   y = np.array([2, 1, 2, 1], dtype=np.double)
   bins = np.array([
     np.arange(255, dtype=np.float32),
-    10.0 * np.arange(255, dtype=np.float32)
+    np.arange(255, dtype=np.float32)
   ])
+  # TODO include nontrivial bins
 
   tree, preds = fit_tree(
     X,
@@ -36,11 +41,11 @@ def test_fit_tree_simple():
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 3
-  assert_array_equal(tree.left_children,        [ 1, 0, 0])
-  assert_array_equal(tree.right_children,       [ 2, 0, 0])
-  assert_array_equal(tree.split_cols,           [ 1, 0, 0])
-  assert_array_almost_equal(tree.split_vals,    [10, 0, 0])
-  assert_array_almost_equal(tree.node_means,    [ 0, 2, 1])
+  assert_array_equal(tree.left_children,  [ 1, 0, 0])
+  assert_array_equal(tree.right_children, [ 2, 0, 0])
+  assert_array_equal(tree.split_cols[0],  1)
+  assert_array_almost_equal(tree.split_vals[0], 2)
+  assert_array_almost_equal(tree.node_means, [ 0, 2, 1])
   assert_array_almost_equal(preds, [2, 1, 2, 1])
 
 
