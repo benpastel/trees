@@ -6,6 +6,8 @@ import numpy as np
 from trees.params import Params
 from trees.c.bfs_tree import build_tree, eval_tree as c_eval_tree
 
+
+# trinary tree
 @dataclass
 class Tree:
   node_count: int
