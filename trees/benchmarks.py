@@ -290,19 +290,19 @@ if __name__ == '__main__':
   tree_count = int(os.environ['TREE_COUNT'])
   print(f'\n\nTREE_COUNT={tree_count}')
 
-  # name => (function that loads data and returns (X, y), params)
+  # name => function that loads data and returns (X, y)
   benchmarks = {
-    'Agaricus':            (load_agaricus,     Params(tree_count=tree_count)),
-    'House Prices':        (load_house_prices, Params(tree_count=tree_count)),
-    'Home Credit Default': (load_credit,       Params(tree_count=tree_count)),
-    'Santander Value':     (load_santander,    Params(tree_count=tree_count)),
-    # 'M5':                  (load_m5,           Params(tree_count=tree_count)),
-    # 'Grupo':               (load_grupo,        Params(tree_count=tree_count))
+    'Agaricus':            load_agaricus,
+    'House Prices':        load_house_prices,
+    'Home Credit Default': load_credit,
+    'Santander Value':     load_santander,
+    # 'M5':                load_m5,
+    # 'Grupo':             load_grupo,
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
 
-  for name, (load_data_fn, tree_params) in benchmarks.items():
+  for name, load_data_fn in benchmarks.items():
     print(f'\n\n{name}:\n')
 
     # split the time-series according to time
@@ -337,12 +337,27 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    with timed(f'\n{tree_params}: train our tree ...'):
+    with timed('\ntrain BFS tree ...'):
       # with profiled():
-      model, _ = fit(train_X, train_y, tree_params)
+      model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
     print(model.__str__(verbose=False))
 
-    with timed(f'  predict our tree...'):
+    with timed(f'  predict BFS tree...'):
+      # with profiled():
+      train_preds = predict(model, train_X)
+      valid_preds = predict(model, valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
+
+    with timed('\ntrain DFS tree ...'):
+      # with profiled():
+      model, _ = fit(train_X, train_y, Params(use_bfs_tree=False, tree_count=tree_count))
+    print(model.__str__(verbose=False))
+
+    with timed(f'  predict DFS tree...'):
       # with profiled():
       train_preds = predict(model, train_X)
       valid_preds = predict(model, valid_X)

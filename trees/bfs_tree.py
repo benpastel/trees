@@ -6,8 +6,8 @@ import numpy as np
 from trees.params import Params
 from trees.c.bfs_tree import build_tree, eval_tree as c_eval_tree
 
-
-# trinary tree
+# A tree that grows level-wise, like XGBoost.
+# It's trinary and has some experimental regularization
 @dataclass
 class Tree:
   node_count: int
@@ -31,16 +31,16 @@ def fit_tree(
   assert y.shape == (rows,)
   assert bins.shape == (cols, params.bucket_count-1)
   assert bins.dtype == np.float32
-  assert 0 <= params.smooth_factor
-  assert 0 <= params.weight_smooth_factor
-  assert 0 <= params.third_split_penalty
+  assert 0 <= params.bfs_smooth_factor
+  assert 0 <= params.bfs_weight_smooth_factor
+  assert 0 <= params.bfs_third_split_penalty
   assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
   assert 0 < cols < 2**32-1, 'cols must fit in uint32'
 
   # check if depth constraint imposes a tighter max_nodes
-  max_nodes_from_depth = np.sum(3**np.arange(params.max_depth))
-  max_nodes = min(params.max_nodes, max_nodes_from_depth)
+  max_nodes_from_depth = np.sum(3**np.arange(params.bfs_max_depth))
+  max_nodes = min(params.bfs_max_nodes, max_nodes_from_depth)
   assert 0 < max_nodes < 2**16, 'max_nodes must fit in uint16'
   assert 0 < cols * max_nodes * params.bucket_count < 2**64-1, 'histograms indices must fit in uint64'
 
@@ -66,10 +66,10 @@ def fit_tree(
     right_children,
     node_means,
     preds,
-    params.smooth_factor,
-    params.weight_smooth_factor,
-    params.max_depth,
-    params.third_split_penalty,
+    params.bfs_smooth_factor,
+    params.bfs_weight_smooth_factor,
+    params.bfs_max_depth,
+    params.bfs_third_split_penalty,
     params.bucket_count)
 
   # convert the splits from binned uint8 values => original float32 values

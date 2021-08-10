@@ -5,6 +5,18 @@ import numpy as np
 
 from trees.params import Params
 
+# A binary tree that grows best-node-first, like LightGBM
+# currently has no regularization and is all in python
+@dataclass
+class Tree:
+  node_count: int
+  split_cols: np.ndarray
+  split_vals: np.ndarray
+  left_children: np.ndarray
+  right_children: np.ndarray
+  node_means: np.ndarray
+
+
 _VERBOSE = False
 
 def variance(
@@ -49,17 +61,6 @@ def calc_gain(
   new_mse = left_var * left_count + right_var * right_count
 
   return old_mse - new_mse
-
-
-# unlike the trinary tree we use in BFS, this is a normal binary tree
-@dataclass
-class Tree:
-  node_count: int
-  split_cols: np.ndarray
-  split_vals: np.ndarray
-  left_children: np.ndarray
-  right_children: np.ndarray
-  node_means: np.ndarray
 
 def update_histograms(
     n: int,
@@ -232,9 +233,8 @@ def fit_tree(
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
   assert 0 < cols < 2**32-1, 'cols must fit in uint32'
 
-  # TODO split DFS and BFS specific Params off
-  # currenly only respects max nodes, and we want a different default value
-  max_nodes = params.max_nodes
+  # TODO add a depth constraint too
+  max_nodes = params.dfs_max_nodes
   assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
 
   split_cols = np.zeros(max_nodes, dtype=np.uint64)

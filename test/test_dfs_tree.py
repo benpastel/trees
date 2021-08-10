@@ -67,7 +67,7 @@ def test_fit_tree_order():
     X,
     y,
     bins,
-    Params(max_nodes=5, bucket_count=256)
+    Params(dfs_max_nodes=5, bucket_count=256)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 5
