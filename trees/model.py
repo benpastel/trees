@@ -1,14 +1,24 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 
 import numpy as np
 from scipy.stats import chi2
 
 from trees.params import Params
-# from trees.bfs_tree import Tree, fit_tree, eval_tree
-from trees.dfs_tree import Tree, fit_tree, eval_tree
+from trees.bfs_tree import (
+  Tree as bfs_Tree,
+  fit_tree as bfs_fit_tree,
+  eval_tree as bfs_eval_tree
+)
+from trees.dfs_tree import (
+  Tree as dfs_Tree,
+  fit_tree as dfs_fit_tree,
+  eval_tree as dfs_eval_tree
+)
 from trees.c.bfs_tree import apply_bins as c_apply_bins
 from trees.utils import timed
+
+Tree = Union[dfs_Tree, bfs_Tree]
 
 @dataclass
 class Model:
@@ -139,14 +149,19 @@ def fit(
 
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(bin_X, target, bins, params)
+    if params.use_bfs_tree:
+      tree, new_preds = bfs_fit_tree(bin_X, target, bins, params) # type: ignore
 
-    if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
-      # 2 trees with 1 node in a row
-      # don't add the 2nd one, and stop early
-      return Model(trees, targets_are_float, mean_y), preds
+      if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
+        # 2 trees with 1 node in a row
+        # don't add the 2nd one, and stop early
+        return Model(trees, targets_are_float, mean_y), preds
 
-    trees.append(tree)
+      trees.append(tree)
+    else:
+      tree, new_preds = dfs_fit_tree(bin_X, target, bins, params) # type: ignore
+      trees.append(tree)
+
     preds += new_preds
 
   return Model(trees, targets_are_float, mean_y), preds
@@ -159,7 +174,10 @@ def predict(model: Model, X: np.ndarray) -> np.ndarray:
   values = np.full(len(X), model.mean, dtype=np.double)
 
   for tree in model.trees:
-    values += eval_tree(tree, X)
+    if isinstance(tree, bfs_Tree):
+      values += bfs_eval_tree(tree, X)
+    else:
+      values += dfs_eval_tree(tree, X)
 
   if model.targets_are_float:
     return values
