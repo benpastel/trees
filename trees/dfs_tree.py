@@ -5,6 +5,7 @@ import numpy as np
 
 from trees.params import Params
 
+_VERBOSE = False
 
 def variance(
     sum_sqs: float,
@@ -114,7 +115,8 @@ def _best_col_split(
     return -np.inf, None
 
   parent_var = variance(total_sum_sq, total_sum, total_count)
-  print(f"  parent:{parent_var}")
+  if _VERBOSE:
+    print(f"  parent:{parent_var}")
 
   left_count = 0
   left_sum = 0
@@ -141,7 +143,8 @@ def _best_col_split(
     left_var = variance(left_sum_sq, left_sum, left_count)
     right_var = variance(right_sum_sq, right_sum, right_count)
     gain = calc_gain(left_var, right_var, parent_var, left_count, right_count, total_count)
-    print(f"  b={b}: {left_var} ({left_sum_sq}, {left_sum}, {left_count}), {right_var} ({right_sum_sq}, {right_sum}, {right_count}), {gain}")
+    if _VERBOSE:
+      print(f"  b={b}: {left_var} ({left_sum_sq}, {left_sum}, {left_count}), {right_var} ({right_sum_sq}, {right_sum}, {right_count}), {gain}")
 
     if gain > best_gain:
       best_gain = float(gain)
@@ -173,7 +176,8 @@ def update_node_splits(
   assert 0 < cols
 
   for c in range(cols):
-    print(f"c={c}")
+    if _VERBOSE:
+      print(f"c={c}")
     gain, split_bin = _best_col_split(
       hist_counts[n,c],
       hist_sums[n,c],
@@ -284,7 +288,6 @@ def fit_tree(
     can_split_node = (node_counts >= 2) & (left_children == 0)
     node_gains[~can_split_node] = -np.inf
 
-    print(f"best gain: {node_gains.max()}")
 
     if node_gains.max() <= 0:
       # can't improve anymore
@@ -295,7 +298,9 @@ def fit_tree(
     split_c = split_cols[split_n]
     split_bin = split_bins[split_n]
 
-    print(f"split: {split_n, split_c, split_bin}")
+    if _VERBOSE:
+      print(f"best gain: {node_gains.max()}")
+      print(f"split: {split_n, split_c, split_bin}")
 
     # make the split
     left_children[split_n] = left_child = node_count
@@ -366,14 +371,24 @@ def fit_tree(
   for n in range(node_count):
     split_vals[n] = bins[split_cols[n], split_bins[n]]
 
-  # filter down to the number of nodes we actually used
+  # truncate down to the number of nodes we actually used
+  split_cols = split_cols[:node_count]
+  left_children = left_children[:node_count]
+  right_children = right_children[:node_count]
+
+  # zero out split_vals at leaves
+  # it doesn't matter what they are, but this makes it easier to assert what the
+  # tree looks like in the unit test
+  is_leaf = (left_children == 0)
+  split_vals[is_leaf] = 0
+
   return Tree(
     node_count,
-    split_cols[:node_count],
+    split_cols,
     split_vals,
-    left_children[:node_count],
-    right_children[:node_count],
-    node_means
+    left_children,
+    right_children,
+    node_means,
   ), preds
 
 

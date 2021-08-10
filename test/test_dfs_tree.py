@@ -16,7 +16,7 @@ def test_fit_tree_simple():
 
   # perfect split on 2nd column
   #
-  #    (c=1, v=2)
+  #    (c=1, bin=2, v=20)
   #     /      \
   # {2,2}     {1,1}
   #
@@ -27,25 +27,26 @@ def test_fit_tree_simple():
     [3, 3],
   ], dtype=np.uint8)
   y = np.array([2, 1, 2, 1], dtype=np.double)
+
+  # the bins in the 2nd column are
   bins = np.array([
-    np.arange(255, dtype=np.float32),
-    np.arange(255, dtype=np.float32)
-  ])
-  # TODO include nontrivial bins
+    [0, 1, 2, 3, 4],
+    [0, 10, 20, 30, 40]
+  ], dtype=np.float32)
 
   tree, preds = fit_tree(
     X,
     y,
     bins,
-    Params(bucket_count=256)
+    Params(bucket_count=6)
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 3
-  assert_array_equal(tree.left_children,  [ 1, 0, 0])
-  assert_array_equal(tree.right_children, [ 2, 0, 0])
-  assert_array_equal(tree.split_cols[0],  1)
-  assert_array_almost_equal(tree.split_vals[0], 2)
-  assert_array_almost_equal(tree.node_means, [ 0, 2, 1])
+  assert_array_equal(tree.left_children,     [1,  0, 0])
+  assert_array_equal(tree.right_children,    [2,  0, 0])
+  assert_array_equal(tree.split_cols,        [1,  0, 0])
+  assert_array_almost_equal(tree.split_vals, [20, 0, 0])
+  assert_array_almost_equal(tree.node_means, [0,  2, 1])
   assert_array_almost_equal(preds, [2, 1, 2, 1])
 
 
@@ -73,7 +74,7 @@ def test_fit_tree_order():
   assert_array_equal(tree.left_children,     [1, 3, 0, 0, 0])
   assert_array_equal(tree.right_children,    [2, 4, 0, 0, 0])
   assert_array_equal(tree.split_cols,        [0, 0, 0, 0, 0])
-  assert_array_almost_equal(tree.split_vals, [9, 0, 3, 0, 0])
+  assert_array_almost_equal(tree.split_vals, [9, 3, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [0, 0, 100, 7/4, 8])
   assert_array_almost_equal(preds, [8, 7/4, 8, 7/4, 7/4, 100, 7/4, 100, 100])
 
