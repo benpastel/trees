@@ -12,8 +12,11 @@ class Tree:
   node_count: int
   split_cols: np.ndarray
   split_vals: np.ndarray
+
+  # index of the left child of this node
+  # right child is always left child + 1
+  # left_children == 0 means it's a leaf
   left_children: np.ndarray
-  right_children: np.ndarray
   node_means: np.ndarray
 
 
@@ -194,7 +197,6 @@ def update_memberships_and_counts(
     c: int,
     parent: int,
     left_child: int,
-    right_child: int,
     split_val: int,
     X: np.ndarray,
     memberships: np.ndarray,
@@ -203,8 +205,10 @@ def update_memberships_and_counts(
   # will be in C
   rows, cols = X.shape
   assert memberships.shape == (rows,)
-  assert left_child < right_child
   assert 0 <= c < cols
+
+  # right child is always 1 larger than left child
+  right_child = left_child + 1
 
   split_vals = X[memberships == parent, c]
 
@@ -240,7 +244,6 @@ def fit_tree(
   split_cols = np.zeros(max_nodes, dtype=np.uint64)
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
-  right_children = np.zeros(max_nodes, dtype=np.uint16)
 
   # row => node it belongs to
   # initially belong to root (0)
@@ -304,13 +307,12 @@ def fit_tree(
 
     # make the split
     left_children[split_n] = left_child = node_count
-    right_children[split_n] = right_child = node_count + 1
+    right_child = node_count + 1
     node_count += 2
     update_memberships_and_counts(
       int(split_c),
       int(split_n),
       left_child,
-      right_child,
       split_bin,
       X,
       memberships,
@@ -374,7 +376,6 @@ def fit_tree(
   # truncate down to the number of nodes we actually used
   split_cols = split_cols[:node_count]
   left_children = left_children[:node_count]
-  right_children = right_children[:node_count]
 
   # zero out split_vals at leaves
   # it doesn't matter what they are, but this makes it easier to assert what the
@@ -387,7 +388,6 @@ def fit_tree(
     split_cols,
     split_vals,
     left_children,
-    right_children,
     node_means,
   ), preds
 
@@ -397,7 +397,6 @@ def c_eval_tree(
   split_cols: np.ndarray,
   split_vals: np.ndarray,
   left_children: np.ndarray,
-  right_children: np.ndarray,
   node_means: np.ndarray,
   out_vals: np.ndarray
 ) -> None:
@@ -413,12 +412,11 @@ def c_eval_tree(
     # TODO: change representation to assume right is left + 1
     # so we can just choose whether to add that
     while left_children[n]:
-      if X[r, split_cols[n]] <= split_vals[n]:
-        # go left
-        n = left_children[n]
-      else:
-        # go right
-        n = right_children[n]
+
+      # right child nodes are always one higher than left
+      go_right = (X[r, split_cols[n]] > split_vals[n])
+
+      n = left_children[n] + go_right
 
     # the predicted value is the mean of the leaf we ended up in
     out_vals[r] = node_means[n]
@@ -435,7 +433,6 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
     tree.split_cols,
     tree.split_vals,
     tree.left_children,
-    tree.right_children,
     tree.node_means,
     values)
   return values

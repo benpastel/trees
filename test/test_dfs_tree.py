@@ -7,10 +7,6 @@ from trees.dfs_tree import fit_tree, eval_tree, Tree, variance
 from trees.params import Params
 
 
-def test_variance():
-
-  assert variance(8, 4, 2) == 0
-
 def test_fit_tree_simple():
   pp = pprint.PrettyPrinter(indent=4)
 
@@ -43,7 +39,6 @@ def test_fit_tree_simple():
   pp.pprint(tree.__dict__)
   assert tree.node_count == 3
   assert_array_equal(tree.left_children,     [1,  0, 0])
-  assert_array_equal(tree.right_children,    [2,  0, 0])
   assert_array_equal(tree.split_cols,        [1,  0, 0])
   assert_array_almost_equal(tree.split_vals, [20, 0, 0])
   assert_array_almost_equal(tree.node_means, [0,  2, 1])
@@ -72,7 +67,6 @@ def test_fit_tree_order():
   pp.pprint(tree.__dict__)
   assert tree.node_count == 5
   assert_array_equal(tree.left_children,     [1, 3, 0, 0, 0])
-  assert_array_equal(tree.right_children,    [2, 4, 0, 0, 0])
   assert_array_equal(tree.split_cols,        [0, 0, 0, 0, 0])
   assert_array_almost_equal(tree.split_vals, [9, 3, 0, 0, 0])
   assert_array_almost_equal(tree.node_means, [0, 0, 100, 7/4, 8])
@@ -92,7 +86,6 @@ def test_eval_tree():
     split_cols = np.array([1,   0,  0, 0, 0], dtype=np.uint64),
     split_vals = np.array([100, 0, 10, 0, 0], dtype=np.float32),
     left_children  = np.array([1, 0, 3, 0, 0], dtype=np.uint16),
-    right_children = np.array([2, 0, 4, 0, 0], dtype=np.uint16),
     node_means     = np.array([0, 1, 0, 3, 2], dtype=np.double),
   )
 
