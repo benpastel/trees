@@ -4,6 +4,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
+from trees.c.dfs_tree import update_histograms as c_update_histograms
 
 # A binary tree that grows best-node-first, like LightGBM
 # currently has no regularization and is all in python
@@ -66,13 +67,13 @@ def calc_gain(
   return old_mse - new_mse
 
 def update_histograms(
-    n: int,
     memberships: np.ndarray,
     X: np.ndarray,
     y: np.ndarray,
     hist_counts: np.ndarray,
     hist_sums: np.ndarray,
-    hist_sum_sqs: np.ndarray
+    hist_sum_sqs: np.ndarray,
+    n: int,
   ) -> None:
   # will be C
   nodes, cols, vals = hist_counts.shape
@@ -268,7 +269,8 @@ def fit_tree(
   node_counts[0] = rows
 
   # root histograms
-  update_histograms(0, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+  # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
+  c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
 
   # root node
   update_node_splits(
@@ -322,7 +324,8 @@ def fit_tree(
     # update histograms
     if node_counts[left_child] < node_counts[right_child]:
       # calculate left
-      update_histograms(left_child, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
+      c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
 
       # find right via subtraction
       hist_counts[right_child] = hist_counts[split_n] - hist_counts[left_child]
@@ -330,7 +333,8 @@ def fit_tree(
       hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
     else:
       # calculate right
-      update_histograms(right_child, memberships, X, y, hist_counts, hist_sums, hist_sum_sqs)
+      # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
+      c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
 
       # find left via subtraction
       hist_counts[left_child] = hist_counts[split_n] - hist_counts[right_child]
