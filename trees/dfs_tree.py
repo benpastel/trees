@@ -5,7 +5,6 @@ import numpy as np
 
 from trees.params import Params
 from trees.c.dfs_tree import update_histograms as c_update_histograms
-from trees.c.dfs_tree import update_memberships_and_counts as c_update_memberships_and_counts
 
 # A binary tree that grows best-node-first, like LightGBM
 # currently has no regularization and is all in python
@@ -160,21 +159,19 @@ def _best_col_split(
 
 
 def update_node_splits(
+    n: int,
+
     hist_counts: np.ndarray,
     hist_sums: np.ndarray,
     hist_sum_sqs: np.ndarray,
 
     node_gains: np.ndarray,
     split_cols: np.ndarray,
-    split_bins: np.ndarray,
-
-    n: int,
+    split_bins: np.ndarray
 
   ) -> None:
-  # set:
-  #   split_cols[n] to the best column to split this node on
-  #   split_bins[n] to the value to split that column
-  #   node_gains[n] to the gain from taking the split
+  # set split_cols[n] to the best column to split this node on
+  # and node_gains[n] to the gain from taking that split
   #
   # will be in C
   nodes, cols, vals = hist_counts.shape
@@ -198,13 +195,13 @@ def update_node_splits(
 
 
 def update_memberships_and_counts(
-    X: np.ndarray,
-    memberships: np.ndarray,
-    node_counts: np.ndarray,
     c: int,
     parent: int,
     left_child: int,
-    split_val: int
+    split_val: int,
+    X: np.ndarray,
+    memberships: np.ndarray,
+    node_counts: np.ndarray
 ) -> None:
   # will be in C
   rows, cols = X.shape
@@ -277,13 +274,13 @@ def fit_tree(
 
   # root node
   update_node_splits(
+    0,
     hist_counts,
     hist_sums,
     hist_sum_sqs,
     node_gains,
     split_cols,
     split_bins,
-    0,
   )
 
   # grow the tree
@@ -314,19 +311,20 @@ def fit_tree(
     left_children[split_n] = left_child = node_count
     right_child = node_count + 1
     node_count += 2
-    c_update_memberships_and_counts(
-      X,
-      memberships,
-      node_counts,
+    update_memberships_and_counts(
       int(split_c),
       int(split_n),
       left_child,
       split_bin,
+      X,
+      memberships,
+      node_counts,
     )
 
     # update histograms
     if node_counts[left_child] < node_counts[right_child]:
       # calculate left
+      # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
       c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
 
       # find right via subtraction
@@ -335,6 +333,7 @@ def fit_tree(
       hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
     else:
       # calculate right
+      # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
       c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
 
       # find left via subtraction
@@ -344,24 +343,25 @@ def fit_tree(
 
     # find the best splits for each new node
     update_node_splits(
+      left_child,
       hist_counts,
       hist_sums,
       hist_sum_sqs,
       node_gains,
       split_cols,
       split_bins,
-      left_child,
     )
 
     update_node_splits(
+      right_child,
       hist_counts,
       hist_sums,
       hist_sum_sqs,
       node_gains,
       split_cols,
       split_bins,
-      right_child,
     )
+
 
   # finished growing the tree
 
