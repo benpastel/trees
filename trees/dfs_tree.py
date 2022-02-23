@@ -5,7 +5,7 @@ import numpy as np
 
 from trees.params import Params
 from trees.c.dfs_tree import update_histograms as c_update_histograms
-# from trees.c.dfs_tree import update_memberships_and_counts as c_update_memberships_and_counts
+from trees.c.dfs_tree import update_memberships as c_update_memberships
 
 # A binary tree that grows best-node-first, like LightGBM
 # currently has no regularization and is all in python
@@ -279,7 +279,7 @@ def fit_tree(
     # allocate new membership arrays
     memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
     memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
-    update_memberships(
+    c_update_memberships(
       X,
       memberships[split_n],
       memberships[left_child],

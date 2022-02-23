@@ -10,12 +10,13 @@
 
 static PyObject* update_histograms(PyObject *self, PyObject *args);
 
-static PyObject* update_memberships_and_counts(PyObject *self, PyObject *args);
+static PyObject* update_memberships(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     // {"update_node_splits", update_node_splits, METH_VARARGS, ""},
-    {"update_memberships_and_counts", update_memberships_and_counts, METH_VARARGS, ""},
+    {"update_memberships", update_memberships, METH_VARARGS, ""},
+    // {"eval_tree", eval_tree, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
@@ -79,74 +80,52 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject* update_memberships_and_counts(PyObject *dummy, PyObject *args)
+static PyObject* update_memberships(PyObject *dummy, PyObject *args)
 {
-    // X: (rows, cols) array of uint8s,
-    // memberships: (rows,)  array of uint16s,
-    // node_counts: (nodes,) array of uint64s
-    // col: uint64 column we are splitting on
-    // parent: uint16 parent node,
-    // left_child: uint16 left child node (right child is +1)
-    // split_val: uint8 (all values <= split_val go to the left child)
-    //
-    // change memberships from parent to left or right child
-    // set the counts of left & right children
-    //
-    // TODO: change memberships to arrays; then this will become harder
-    PyObject *X_arg, *memberships_arg, *node_counts_arg;
+    // For each row in parent, add to left or right child
+    PyObject *X_arg, *parent_members_arg, *left_members_arg, *right_members_arg;
     int col_arg;
-    int parent_arg;
-    int left_child_arg;
-    int split_val_arg;
+    int val_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!iiii",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!ii",
         &PyArray_Type, &X_arg,
-        &PyArray_Type, &memberships_arg,
-        &PyArray_Type, &node_counts_arg,
+        &PyArray_Type, &parent_members_arg,
+        &PyArray_Type, &left_members_arg,
+        &PyArray_Type, &right_members_arg,
         &col_arg,
-        &parent_arg,
-        &left_child_arg,
-        &split_val_arg
+        &val_arg
     )) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT16, NPY_ARRAY_OUT_ARRAY);
-    PyObject *node_counts_obj = PyArray_FROM_OTF(node_counts_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *parent_members_obj = PyArray_FROM_OTF(parent_members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_members_obj = PyArray_FROM_OTF(left_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *right_members_obj = PyArray_FROM_OTF(right_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
 
     const uint64_t col = col_arg;
-    const uint16_t parent = parent_arg;
-    const uint16_t left_child = left_child_arg;
-    const uint16_t right_child = left_child + 1;
-    const uint8_t split_val = split_val_arg;
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint8_t val = val_arg;
+    const uint64_t rows_in_parent = (uint64_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
-    uint16_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
-    double *   __restrict node_counts = PyArray_DATA((PyArrayObject *) node_counts_obj);
+    uint8_t *  __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * __restrict parent_members = PyArray_DATA((PyArrayObject *) parent_members_obj);
+    uint64_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
+    uint64_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
 
-    uint64_t left_count = 0;
-
-    for (uint64_t r = 0; r < rows; r++) {
-        if (memberships[r] != parent) continue;
-
-        if (X[r * cols + col] <= split_val) {
+    uint64_t left = 0;
+    uint64_t right = 0;
+    for (uint64_t p = 0; p < rows_in_parent; p++) {
+        uint64_t r = parent_members[p];
+        if (X[r * cols + col] <= val) {
             // assign to left child
-            memberships[r] = left_child;
-            left_count++;
+            left_members[left++] = r;
         } else {
             // assign to right child
-            memberships[r] = right_child;
+            right_members[right++] = r;
         }
     }
-    node_counts[left_child] = left_count;
-
-    // everything else is right count
-    node_counts[right_child] = node_counts[parent] - node_counts[left_child];
-
     Py_RETURN_NONE;
 }
 
@@ -198,6 +177,113 @@ static PyObject* update_memberships_and_counts(PyObject *dummy, PyObject *args)
 
 //     Py_RETURN_NONE;
 // }
+
+
+static PyObject* eval_tree(PyObject *dummy, PyObject *args)
+{
+    PyObject *X_arg;
+    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
+    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
+    PyObject *out_arg;
+
+    struct timeval total_start;
+    struct timeval loop_start;
+    struct timeval loop_stop;
+    struct timeval total_stop;
+    gettimeofday(&total_start, NULL);
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
+        &PyArray_Type, &X_arg,
+        &PyArray_Type, &split_col_arg,
+        &PyArray_Type, &split_lo_arg,
+        &PyArray_Type, &split_hi_arg,
+        &PyArray_Type, &left_childs_arg,
+        &PyArray_Type, &mid_childs_arg,
+        &PyArray_Type, &right_childs_arg,
+        &PyArray_Type, &node_mean_arg,
+        &PyArray_Type, &out_arg)) return NULL;
+
+    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+
+    if (X_obj == NULL ||
+        split_col_obj == NULL ||
+        split_lo_obj == NULL ||
+        split_hi_obj == NULL ||
+        left_childs_obj == NULL ||
+        mid_childs_obj == NULL ||
+        right_childs_obj == NULL ||
+        node_mean_obj == NULL ||
+        out_obj == NULL)
+    {
+        Py_XDECREF(X_obj);
+        Py_XDECREF(split_col_obj);
+        Py_XDECREF(split_lo_obj);
+        Py_XDECREF(split_hi_obj);
+        Py_XDECREF(left_childs_obj);
+        Py_XDECREF(mid_childs_obj);
+        Py_XDECREF(right_childs_obj);
+        Py_XDECREF(node_mean_obj);
+        Py_XDECREF(out_obj);
+        return NULL;
+    }
+    // cast data sections of numpy arrays to plain C pointers
+    // this assumes the arrays are C-order, aligned, non-strided
+    float *    __restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * __restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
+    float *    __restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
+    float *    __restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
+    uint16_t * __restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
+    uint16_t * __restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
+    uint16_t * __restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
+    double *   __restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
+
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+
+    gettimeofday(&loop_start, NULL);
+    #pragma omp parallel for
+    for (uint64_t r = 0; r < rows; r++) {
+        uint16_t n = 0;
+        uint16_t left;
+        while ((left = left_childs[n])) {
+            float val = X[r*cols + split_col[n]];
+            n = (val <= split_lo[n]) ? left :
+                (val <= split_hi[n]) ? mid_childs[n] :
+                right_childs[n];
+        }
+        out[r] = node_means[n];
+    }
+    gettimeofday(&loop_stop, NULL);
+
+    Py_DECREF(X_obj);
+    Py_DECREF(split_col_obj);
+    Py_DECREF(split_lo_obj);
+    Py_DECREF(split_hi_obj);
+    Py_DECREF(left_childs_obj);
+    Py_DECREF(mid_childs_obj);
+    Py_DECREF(right_childs_obj);
+    Py_DECREF(node_mean_obj);
+    Py_DECREF(out_obj);
+
+    gettimeofday(&total_stop, NULL);
+#if VERBOSE
+    printf("  eval: %.1f (%.1f loop)\n",
+        ((float) msec(total_start, total_stop)) / 1000.0,
+        ((float) msec(loop_start, loop_stop)) / 1000.0);
+#endif
+
+    Py_RETURN_NONE;
+}
 
 
 static struct PyModuleDef mod_def =
