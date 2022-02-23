@@ -39,7 +39,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
         &PyArray_Type, &hist_sum_sqs_arg,
         &node_arg)) return NULL;
 
-    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
@@ -48,7 +48,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     const int node = node_arg;
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint64_t rows_in_node = (uint64_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
@@ -56,15 +56,16 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
     double *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
-    uint16_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
+    uint64_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
 
     // the histograms are indexed [node, column, bucket] => [column, bucket]
     uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
     double * __restrict sums = PyArray_DATA((PyArrayObject *) hist_sums_obj);
     double * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
 
-    for (uint64_t r = 0; r < rows; r++) {
-        if (memberships[r] != node) continue;
+    // iterate over the rows in this node
+    for (uint64_t i = 0; i < rows_in_node; i++) {
+        uint64_t r = memberships[i];
 
         for (uint64_t c = 0; c < cols; c++) {
             uint8_t v = X[r*cols + c];

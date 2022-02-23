@@ -5,7 +5,7 @@ import numpy as np
 
 from trees.params import Params
 from trees.c.dfs_tree import update_histograms as c_update_histograms
-from trees.c.dfs_tree import update_memberships_and_counts as c_update_memberships_and_counts
+# from trees.c.dfs_tree import update_memberships_and_counts as c_update_memberships_and_counts
 
 # A binary tree that grows best-node-first, like LightGBM
 # currently has no regularization and is all in python
@@ -66,33 +66,6 @@ def calc_gain(
   new_mse = left_var * left_count + right_var * right_count
 
   return old_mse - new_mse
-
-def update_histograms(
-    memberships: np.ndarray,
-    X: np.ndarray,
-    y: np.ndarray,
-    hist_counts: np.ndarray,
-    hist_sums: np.ndarray,
-    hist_sum_sqs: np.ndarray,
-    n: int,
-  ) -> None:
-  # will be C
-  nodes, cols, vals = hist_counts.shape
-  rows, _ = X.shape
-  assert hist_counts.shape == hist_sums.shape == hist_sum_sqs.shape
-  assert cols == X.shape[1]
-  assert (rows,) == y.shape
-  assert memberships.shape == (rows,)
-
-  X_in_node = X[memberships == n]
-  y_in_node = y[memberships == n]
-
-  for c in range(cols):
-    for v in range(vals):
-      matching_y = y_in_node[X_in_node[:, c] == v]
-      hist_counts[n,c,v] = len(matching_y)
-      hist_sums[n,c,v] = matching_y.sum()
-      hist_sum_sqs[n,c,v] = np.sum(matching_y * matching_y)
 
 
 def _best_col_split(
@@ -159,6 +132,20 @@ def _best_col_split(
   return best_gain, best_bin
 
 
+def update_memberships(
+  X: np.ndarray,
+  parent_members: np.ndarray,
+  left_members: np.ndarray,
+  right_members: np.ndarray,
+  split_c: int,
+  split_bin: int,
+) -> None:
+  # will be in c
+  is_left = (X[parent_members, split_c] <= split_bin)
+  left_members[:] = parent_members[is_left]
+  right_members[:] = parent_members[~is_left]
+
+
 def update_node_splits(
     hist_counts: np.ndarray,
     hist_sums: np.ndarray,
@@ -197,34 +184,6 @@ def update_node_splits(
       split_bins[n] = split_bin
 
 
-def update_memberships_and_counts(
-    X: np.ndarray,
-    memberships: np.ndarray,
-    node_counts: np.ndarray,
-    c: int,
-    parent: int,
-    left_child: int,
-    split_val: int
-) -> None:
-  # will be in C
-  rows, cols = X.shape
-  assert memberships.shape == (rows,)
-  assert 0 <= c < cols
-
-  # right child is always 1 larger than left child
-  right_child = left_child + 1
-
-  split_vals = X[memberships == parent, c]
-
-  new_memberships = np.full(len(split_vals), right_child, dtype=memberships.dtype)
-  new_memberships[split_vals <= split_val] = left_child
-
-  memberships[memberships == parent] = new_memberships
-
-  node_counts[left_child] = np.count_nonzero(new_memberships == left_child)
-  node_counts[right_child] = np.count_nonzero(new_memberships == right_child)
-
-
 def fit_tree(
     X: np.ndarray,
     y: np.ndarray,
@@ -240,8 +199,6 @@ def fit_tree(
   assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
   assert 0 < cols < 2**32-1, 'cols must fit in uint32'
-
-  # TODO add a depth constraint too
   max_nodes = params.dfs_max_nodes
   assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
 
@@ -249,9 +206,9 @@ def fit_tree(
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
 
-  # row => node it belongs to
-  # initially belong to root (0)
-  memberships = np.zeros(rows, dtype=np.uint16)
+  # node => array of rows belonging to it
+  # initially all rows belong to root (0)
+  memberships = {0: np.arange(rows, dtype=np.uint64)}
 
   # node stats:
   #   - count of rows in the node
@@ -272,8 +229,7 @@ def fit_tree(
   node_counts[0] = rows
 
   # root histograms
-  # update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
-  c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
+  c_update_histograms(memberships[0], X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
 
   # root node
   update_node_splits(
@@ -302,8 +258,8 @@ def fit_tree(
       # TODO plus a splitting penalty
       break
 
-    split_n = np.argmax(node_gains)
-    split_c = split_cols[split_n]
+    split_n = int(np.argmax(node_gains))
+    split_c = int(split_cols[split_n])
     split_bin = split_bins[split_n]
 
     if _VERBOSE:
@@ -314,20 +270,29 @@ def fit_tree(
     left_children[split_n] = left_child = node_count
     right_child = node_count + 1
     node_count += 2
-    c_update_memberships_and_counts(
+
+    # find the number of rows in each child
+    # split bin or less goes left
+    node_counts[left_child] = hist_counts[split_n, split_c, :split_bin+1].sum()
+    node_counts[right_child] = node_counts[split_n] - node_counts[left_child]
+
+    # allocate new membership arrays
+    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
+    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
+    update_memberships(
       X,
-      memberships,
-      node_counts,
-      int(split_c),
-      int(split_n),
-      left_child,
+      memberships[split_n],
+      memberships[left_child],
+      memberships[right_child],
+      split_c,
       split_bin,
     )
+    del memberships[split_n]
 
     # update histograms
     if node_counts[left_child] < node_counts[right_child]:
       # calculate left
-      c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
+      c_update_histograms(memberships[left_child], X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
 
       # find right via subtraction
       hist_counts[right_child] = hist_counts[split_n] - hist_counts[left_child]
@@ -335,7 +300,7 @@ def fit_tree(
       hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
     else:
       # calculate right
-      c_update_histograms(memberships, X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
+      c_update_histograms(memberships[right_child], X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
 
       # find left via subtraction
       hist_counts[left_child] = hist_counts[split_n] - hist_counts[right_child]
@@ -365,12 +330,13 @@ def fit_tree(
 
   # finished growing the tree
 
+  # any node remaining in membership is a leaf
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
-  for n in range(node_count):
-    if np.any(memberships == n):
-      node_means[n] = np.mean(y[memberships == n])
-  preds = node_means[memberships]
+  preds = np.zeros(rows, dtype=np.float32)
+  for n, leaf_members in memberships.items():
+    node_means[n] = np.mean(y[leaf_members])
+    preds[leaf_members] = node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
   split_vals = np.zeros(node_count, dtype=np.float32)
