@@ -4,8 +4,11 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 from trees.params import Params
-from trees.c.dfs_tree import update_histograms as c_update_histograms
-from trees.c.dfs_tree import update_memberships as c_update_memberships
+from trees.c.dfs_tree import (
+  update_histograms as c_update_histograms,
+  update_memberships as c_update_memberships,
+  eval_tree as c_eval_tree,
+)
 
 # A binary tree that grows best-node-first, like LightGBM
 # currently has no regularization and is all in python
@@ -362,7 +365,7 @@ def fit_tree(
   ), preds
 
 
-def c_eval_tree(
+def like_c_eval_tree(
   X: np.ndarray,
   split_cols: np.ndarray,
   split_vals: np.ndarray,

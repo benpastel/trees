@@ -9,19 +9,20 @@
 #include <omp.h>
 
 static PyObject* update_histograms(PyObject *self, PyObject *args);
-
 static PyObject* update_memberships(PyObject *self, PyObject *args);
+static PyObject* eval_tree(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     // {"update_node_splits", update_node_splits, METH_VARARGS, ""},
     {"update_memberships", update_memberships, METH_VARARGS, ""},
-    // {"eval_tree", eval_tree, METH_VARARGS, ""},
+    {"eval_tree", eval_tree, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
 #define VERBOSE 0
 
+// TODO: py deref objects everywhere
 
 static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 {
@@ -182,55 +183,37 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
 static PyObject* eval_tree(PyObject *dummy, PyObject *args)
 {
     PyObject *X_arg;
-    PyObject *split_col_arg, *split_lo_arg, *split_hi_arg;
-    PyObject *left_childs_arg, *mid_childs_arg, *right_childs_arg, *node_mean_arg;
+    PyObject *split_cols_arg, *split_vals_arg;
+    PyObject *left_children_arg, *node_mean_arg;
     PyObject *out_arg;
 
-    struct timeval total_start;
-    struct timeval loop_start;
-    struct timeval loop_stop;
-    struct timeval total_stop;
-    gettimeofday(&total_start, NULL);
-
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!O!O!O!",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!",
         &PyArray_Type, &X_arg,
-        &PyArray_Type, &split_col_arg,
-        &PyArray_Type, &split_lo_arg,
-        &PyArray_Type, &split_hi_arg,
-        &PyArray_Type, &left_childs_arg,
-        &PyArray_Type, &mid_childs_arg,
-        &PyArray_Type, &right_childs_arg,
+        &PyArray_Type, &split_cols_arg,
+        &PyArray_Type, &split_vals_arg,
+        &PyArray_Type, &left_children_arg,
         &PyArray_Type, &node_mean_arg,
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_col_obj = PyArray_FROM_OTF(split_col_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_lo_obj = PyArray_FROM_OTF(split_lo_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_hi_obj = PyArray_FROM_OTF(split_hi_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *left_childs_obj = PyArray_FROM_OTF(left_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *mid_childs_obj = PyArray_FROM_OTF(mid_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
-    PyObject *right_childs_obj = PyArray_FROM_OTF(right_childs_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_cols_obj = PyArray_FROM_OTF(split_cols_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_vals_obj = PyArray_FROM_OTF(split_vals_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     PyObject *out_obj = PyArray_FROM_OTF(out_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     if (X_obj == NULL ||
-        split_col_obj == NULL ||
-        split_lo_obj == NULL ||
-        split_hi_obj == NULL ||
-        left_childs_obj == NULL ||
-        mid_childs_obj == NULL ||
-        right_childs_obj == NULL ||
+        split_cols_obj == NULL ||
+        split_vals_obj == NULL ||
+        left_children_obj == NULL ||
         node_mean_obj == NULL ||
         out_obj == NULL)
     {
         Py_XDECREF(X_obj);
-        Py_XDECREF(split_col_obj);
-        Py_XDECREF(split_lo_obj);
-        Py_XDECREF(split_hi_obj);
-        Py_XDECREF(left_childs_obj);
-        Py_XDECREF(mid_childs_obj);
-        Py_XDECREF(right_childs_obj);
+        Py_XDECREF(split_cols_obj);
+        Py_XDECREF(split_vals_obj);
+        Py_XDECREF(left_children_obj);
         Py_XDECREF(node_mean_obj);
         Py_XDECREF(out_obj);
         return NULL;
@@ -238,50 +221,32 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     float *    __restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * __restrict split_col    = PyArray_DATA((PyArrayObject *) split_col_obj);
-    float *    __restrict split_lo     = PyArray_DATA((PyArrayObject *) split_lo_obj);
-    float *    __restrict split_hi     = PyArray_DATA((PyArrayObject *) split_hi_obj);
-    uint16_t * __restrict left_childs  = PyArray_DATA((PyArrayObject *) left_childs_obj);
-    uint16_t * __restrict mid_childs   = PyArray_DATA((PyArrayObject *) mid_childs_obj);
-    uint16_t * __restrict right_childs = PyArray_DATA((PyArrayObject *) right_childs_obj);
+    uint64_t * __restrict split_cols    = PyArray_DATA((PyArrayObject *) split_cols_obj);
+    float *    __restrict split_vals    = PyArray_DATA((PyArrayObject *) split_vals_obj);
+    uint16_t * __restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
     double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   __restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-    gettimeofday(&loop_start, NULL);
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
         uint16_t left;
-        while ((left = left_childs[n])) {
-            float val = X[r*cols + split_col[n]];
-            n = (val <= split_lo[n]) ? left :
-                (val <= split_hi[n]) ? mid_childs[n] :
-                right_childs[n];
+        while ((left = left_children[n])) {
+            float val = X[r*cols + split_cols[n]];
+            n = (val <= split_vals[n]) ? left : left + 1;
         }
         out[r] = node_means[n];
     }
-    gettimeofday(&loop_stop, NULL);
 
     Py_DECREF(X_obj);
-    Py_DECREF(split_col_obj);
-    Py_DECREF(split_lo_obj);
-    Py_DECREF(split_hi_obj);
-    Py_DECREF(left_childs_obj);
-    Py_DECREF(mid_childs_obj);
-    Py_DECREF(right_childs_obj);
+    Py_DECREF(split_cols_obj);
+    Py_DECREF(split_vals_obj);
+    Py_DECREF(left_children_obj);
     Py_DECREF(node_mean_obj);
     Py_DECREF(out_obj);
-
-    gettimeofday(&total_stop, NULL);
-#if VERBOSE
-    printf("  eval: %.1f (%.1f loop)\n",
-        ((float) msec(total_start, total_stop)) / 1000.0,
-        ((float) msec(loop_start, loop_stop)) / 1000.0);
-#endif
-
     Py_RETURN_NONE;
 }
 
