@@ -19,7 +19,7 @@ class Params:
   bfs_third_split_penalty: float = 4.0
 
   # DFS tree parameters
-  dfs_max_nodes: int = 64
+  dfs_max_nodes: int = 64 # lightgbm defaults to 31 max leaves, let's try that?
 
 
 

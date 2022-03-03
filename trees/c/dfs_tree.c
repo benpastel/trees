@@ -63,10 +63,15 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     double *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
     uint64_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
 
-    // the histograms are indexed [node, column, bucket] => [column, bucket]
+    // the histograms are indexed [node, column, bucket]
     uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
     double * __restrict sums = PyArray_DATA((PyArrayObject *) hist_sums_obj);
     double * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
+
+    // => [column, bucket]
+    counts += node*cols*vals;
+    sums += node*cols*vals;
+    sum_sqs += node*cols*vals;
 
     // iterate over the rows in this node
     for (uint64_t i = 0; i < rows_in_node; i++) {
@@ -74,7 +79,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 
         for (uint64_t c = 0; c < cols; c++) {
             uint8_t v = X[r*cols + c];
-            uint64_t idx = node*cols*vals + c*vals + v;
+            uint64_t idx = c*vals + v;
             counts[idx]++;
             sums[idx] += y[r];
             sum_sqs[idx] += y[r] * y[r];
