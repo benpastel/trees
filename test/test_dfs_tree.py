@@ -3,8 +3,35 @@ import pprint
 
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 
-from trees.dfs_tree import fit_tree, eval_tree, Tree, variance
+from trees.dfs_tree import fit_tree, eval_tree, Tree
 from trees.params import Params
+
+from trees.c.dfs_tree import update_node_splits as c_update_node_splits
+from test.python_stubs import update_node_splits as py_update_node_splits, variance
+
+def test_c_update_nodes():
+  max_nodes = 2
+  cols = 2
+  vals = 256
+
+  hist_counts = np.random.randint(10, size=(max_nodes, cols, vals), dtype=np.uint32)
+  hist_sums = np.random.random(size=(max_nodes, cols, vals)).astype(np.float64)
+  hist_sum_sqs = np.random.random(size=(max_nodes, cols, vals)).astype(np.float64)
+
+  py_node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  py_split_cols = np.zeros(max_nodes, dtype=np.uint64)
+  py_split_bins = np.zeros(max_nodes, dtype=np.uint8)
+
+  c_node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  c_split_cols = np.zeros(max_nodes, dtype=np.uint64)
+  c_split_bins = np.zeros(max_nodes, dtype=np.uint8)
+
+  py_update_node_splits(hist_counts, hist_sums, hist_sum_sqs, py_node_gains, py_split_cols, py_split_bins, 0)
+  c_update_node_splits(hist_counts, hist_sums, hist_sum_sqs, c_node_gains, c_split_cols, c_split_bins, 0)
+
+  assert_array_almost_equal(py_node_gains, c_node_gains)
+  assert_array_equal(py_split_cols, c_split_cols)
+  assert_array_equal(py_split_bins, c_split_bins)
 
 
 def test_fit_tree_simple():
