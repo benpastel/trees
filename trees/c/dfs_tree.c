@@ -321,13 +321,14 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (uint64_t r = 0; r < rows; r++) {
         uint16_t n = 0;
         uint16_t left;
         while ((left = left_children[n])) {
             float val = X[r*cols + split_cols[n]];
-            n = (val <= split_vals[n]) ? left : left + 1;
+            // right child is left + 1
+            n = left + (val > split_vals[n]);
         }
         out[r] = node_means[n];
     }
