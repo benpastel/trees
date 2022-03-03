@@ -14,7 +14,7 @@ binary classification with 2518 true and 2693 false
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
 /usr/local/opt/python@3.8/Frameworks/Python.framework/Versions/3.8/lib/python3.8/site-packages/xgboost/sklearn.py:1146: UserWarning: The use of label encoder in XGBClassifier is deprecated and will be removed in a future release. To remove this warning, do the following: 1) Pass option use_label_encoder=False when constructing XGBClassifier object; and 2) Encode your labels (y) as integers starting with 0, i.e. 0, 1, 2, ..., [num_class - 1].
   warnings.warn(label_encoder_deprecation_msg, UserWarning)
-[11:28:08] WARNING: /Users/travis/build/dmlc/xgboost/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[22:36:42] WARNING: /Users/travis/build/dmlc/xgboost/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
 (0.0s)
 predict xgboost...
 (0.0s)
@@ -25,7 +25,7 @@ predict xgboost...
 
 
 train BFS tree ...
-(0.9s)
+(0.8s)
 Classification model with 10 trees with sizes min=16 max=34 mean=25.9
   predict BFS tree...
 (0.0s)
@@ -36,10 +36,10 @@ Classification model with 10 trees with sizes min=16 max=34 mean=25.9
 
 
 train DFS tree ...
-(13.2s)
+(0.2s)
 Classification model with 10 trees with sizes min=63 max=63 mean=63.0
   predict DFS tree...
-(1.5s)
+(0.0s)
 
       train preds bincount: [2693 2518]
       train: accuracy = 100.00%, precision = 100.00%, recall = 100.00%
@@ -71,13 +71,13 @@ Regression model with 10 trees with sizes min=4 max=10 mean=7.0
 
 
 train DFS tree ...
-(13.0s)
+(0.1s)
 Regression model with 10 trees with sizes min=63 max=63 mean=63.0
   predict DFS tree...
-(0.2s)
+(0.0s)
 
       train: log(MSE): 18.79, MAE: 9188.26
-      valid: log(MSE): 20.21, MAE: 16248.22
+      valid: log(MSE): 20.22, MAE: 16323.43
 
 
 
@@ -89,7 +89,7 @@ Deprecated in NumPy 1.20; for more details and guidance: https://numpy.org/devdo
 X.shape: train (246009, 104), valid (61502, 104)
 binary classification with 19842 true and 226167 false
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
-[11:28:41] WARNING: /Users/travis/build/dmlc/xgboost/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[22:36:46] WARNING: /Users/travis/build/dmlc/xgboost/src/learner.cc:1095: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
 (0.5s)
 predict xgboost...
 (0.1s)
@@ -111,10 +111,10 @@ Classification model with 10 trees with sizes min=7 max=52 mean=27.7
 
 
 train DFS tree ...
-(28.4s)
+(2.5s)
 Classification model with 10 trees with sizes min=63 max=63 mean=63.0
   predict DFS tree...
-(37.1s)
+(0.2s)
 
       train preds bincount: [245879    130]
       train: accuracy = 91.96%, precision = 74.62%, recall = 0.49%
@@ -127,7 +127,7 @@ Santander Value:
 X.shape: train (3568, 4991), valid (891, 4991)
 regression targets with min=30000.0, max=40000000.0, mean=5832821.2
 train xgboost with: {'n_estimators': 10, 'tree_method': 'hist'}...
-(1.7s)
+(1.8s)
 predict xgboost...
 (0.0s)
 
@@ -136,7 +136,7 @@ predict xgboost...
 
 
 train BFS tree ...
-(11.1s)
+(11.0s)
 Regression model with 10 trees with sizes min=1 max=7 mean=4.6
   predict BFS tree...
 (0.0s)
@@ -146,10 +146,10 @@ Regression model with 10 trees with sizes min=1 max=7 mean=4.6
 
 
 train DFS tree ...
-(663.9s)
+(7.3s)
 Regression model with 10 trees with sizes min=63 max=63 mean=63.0
   predict DFS tree...
-(2.0s)
+(0.1s)
 
       train: log(MSE): 30.68, MAE: 3471431.01
       valid: log(MSE): 31.76, MAE: 5274145.91
