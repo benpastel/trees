@@ -13,17 +13,20 @@ static PyObject* update_histograms(PyObject *self, PyObject *args);
 static PyObject* update_node_splits(PyObject *self, PyObject *args);
 static PyObject* update_memberships(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
+static PyObject* choose_bin(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     {"update_node_splits", update_node_splits, METH_VARARGS, ""},
     {"update_memberships", update_memberships, METH_VARARGS, ""},
     {"eval_tree", eval_tree, METH_VARARGS, ""},
+    {"choose_bin", choose_bin, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
 
 #define VERBOSE 0
 #define MIN_LEAF_SIZE 1 // TODO parameter
+#define BUCKETS 64 // TODO parameter
 
 // TODO: py deref objects everywhere
 
@@ -345,6 +348,90 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     Py_DECREF(node_mean_obj);
     Py_DECREF(out_obj);
     Py_RETURN_NONE;
+}
+
+static PyObject* choose_bin(PyObject *dummy, PyObject *args)
+{
+    PyObject *x_arg;
+    PyObject *y_arg;
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "O!O!",
+        &PyArray_Type, &x_arg,
+        &PyArray_Type, &y_arg)) return NULL;
+
+    PyObject *x_obj = PyArray_FROM_OTF(x_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) x_obj, 0);
+
+    // cast data sections of numpy arrays to plain C pointers
+    // this assumes the arrays are C-order, aligned, non-strided
+    // indexed [row in node]
+    uint8_t *  __restrict x = PyArray_DATA((PyArrayObject *) x_obj);
+    double *   __restrict y = PyArray_DATA((PyArrayObject *) y_obj);
+
+    // build histograms indexed by [bucket]
+    uint32_t counts[BUCKETS] = {0};
+    double sums[BUCKETS] = {0};
+    double sum_sqs[BUCKETS] = {0};
+    for (uint64_t r = 0; r < rows; r++) {
+        uint8_t v = x[r];
+        counts[v]++;
+        sums[v] += y[r];
+        sum_sqs[v] += y[r] * y[r];
+    }
+
+    // find the histogram totals
+    uint32_t total_count = 0;
+    double total_sum = 0;
+    double total_sum_sqs = 0;
+    for (uint64_t v = 0; v < BUCKETS; v++) {
+        total_count += counts[v];
+        total_sum += sums[v];
+        total_sum_sqs += sum_sqs[v];
+    }
+
+    // find the best split
+    double parent_var = _variance(total_sum_sqs, total_sum, total_count);
+
+    uint32_t left_count = 0;
+    double left_sum = 0;
+    double left_sum_sqs = 0;
+
+    double best_gain = 0;
+    uint8_t best_v = 0;
+    uint64_t best_left_count = 0;
+
+    // v is a proposed split value; x <= v will go left
+    // max value is vals - 2 so that x = (vals - 1) will go right
+    for (uint64_t v = 0; v < BUCKETS - 1; v++) {
+        left_count += counts[v];
+        left_sum += sums[v];
+        left_sum_sqs += sum_sqs[v];
+
+        if (left_count < MIN_LEAF_SIZE) continue;
+
+        uint32_t right_count = total_count - left_count;
+        double right_sum = total_sum - left_sum;
+        double right_sum_sqs = total_sum_sqs - left_sum_sqs;
+
+        if (right_count < MIN_LEAF_SIZE) continue;
+
+        double left_var = _variance(left_sum_sqs, left_sum, left_count);
+        double right_var = _variance(right_sum_sqs, right_sum, right_count);
+        double gain = _gain(left_var, right_var, parent_var, left_count, right_count, total_count);
+
+        if (gain > best_gain) {
+            best_gain = gain;
+            best_v = v;
+            best_left_count = left_count;
+        }
+    }
+    PyObject* out = PyTuple_New(2);
+    PyTuple_SET_ITEM(out, 0, PyLong_FromLong((long) best_v));
+    PyTuple_SET_ITEM(out, 1, PyLong_FromLong((long) best_left_count));
+    return out;
 }
 
 
