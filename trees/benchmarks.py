@@ -373,19 +373,19 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    with timed('\ntrain BFS tree ...'):
-      # with profiled():
-      model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
-    print(model.__str__(verbose=False))
+    # with timed('\ntrain BFS tree ...'):
+    #   # with profiled():
+    #   model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
+    # print(model.__str__(verbose=False))
 
-    with timed(f'  predict BFS tree...'):
-      # with profiled():
-      train_preds = predict(model, train_X)
-      valid_preds = predict(model, valid_X)
-    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    del model
-    del train_preds
-    del valid_preds
-    gc.collect()
+    # with timed(f'  predict BFS tree...'):
+    #   # with profiled():
+    #   train_preds = predict(model, train_X)
+    #   valid_preds = predict(model, valid_X)
+    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    # del model
+    # del train_preds
+    # del valid_preds
+    # gc.collect()
 
 
