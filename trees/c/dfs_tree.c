@@ -24,6 +24,7 @@ static PyMethodDef Methods[] = {
 
 #define VERBOSE 0
 #define MIN_LEAF_SIZE 1 // TODO parameter
+#define MIN_PARALLEL_SPLIT 1024
 
 // TODO: py deref objects everywhere
 
@@ -73,19 +74,59 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     sums += node*cols*vals;
     sum_sqs += node*cols*vals;
 
-    // iterate over the rows in this node
-    for (uint64_t i = 0; i < rows_in_node; i++) {
-        uint64_t r = memberships[i];
+    if (rows_in_node < MIN_PARALLEL_SPLIT) {
+        // build the histogram single-threaded
+        for (uint64_t i = 0; i < rows_in_node; i++) {
+            uint64_t r = memberships[i];
 
-        for (uint64_t c = 0; c < cols; c++) {
-            uint8_t v = X[r*cols + c];
-            uint64_t idx = c*vals + v;
-            counts[idx]++;
-            sums[idx] += y[r];
-            sum_sqs[idx] += y[r] * y[r];
+            for (uint32_t c = 0; c < cols; c++) {
+                uint8_t v = X[r*cols + c];
+                uint64_t idx = c*vals + v;
+                counts[idx]++;
+                sums[idx] += y[r];
+                sum_sqs[idx] += y[r]*y[r];
+            }
+        }
+    } else {
+        #pragma omp parallel
+        {
+            // accumulate a separate histogram locally in each thread
+            uint32_t * __restrict local_counts = calloc(cols*vals, sizeof(uint32_t));
+            double * __restrict local_sums = calloc(cols*vals, sizeof(double));
+            double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
+
+            #pragma omp for
+            for (uint32_t i = 0; i < rows_in_node; i++) {
+                uint32_t r = memberships[i];
+
+                for (uint32_t c = 0; c < cols; c++) {
+                    uint8_t v = X[r*cols + c];
+                    uint64_t idx = c*vals + v;
+                    local_counts[idx]++;
+                    local_sums[idx] += y[r];
+                    local_sum_sqs[idx] += y[r]*y[r];
+                }
+            }
+
+            // add the histograms together
+            // TODO try atomic
+            //  and/or fix the values so we can vectorize
+            #pragma omp critical
+            {
+                for (uint32_t c = 0; c < cols; c++) {
+                    for (uint v = 0; v < vals; v++) {
+                        uint64_t i = c*vals + v;
+                        counts[i] += local_counts[i];
+                        sums[i] += local_sums[i];
+                        sum_sqs[i] += local_sum_sqs[i];
+                    }
+                }
+            }
+            free(local_counts);
+            free(local_sums);
+            free(local_sum_sqs);
         }
     }
-
     Py_RETURN_NONE;
 }
 

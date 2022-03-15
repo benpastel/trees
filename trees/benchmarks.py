@@ -295,12 +295,12 @@ if __name__ == '__main__':
 
   # name => function that loads data and returns (X, y)
   benchmarks = {
-    # 'Agaricus':            load_agaricus,
-    # 'House Prices':        load_house_prices,
-    # 'Home Credit Default': load_credit,
-    # 'Santander Value':     load_santander,
+    'Agaricus':            load_agaricus,
+    'House Prices':        load_house_prices,
+    'Home Credit Default': load_credit,
+    'Santander Value':     load_santander,
     'M5':                  load_m5,
-    # 'Grupo':               load_grupo,
+    'Grupo':               load_grupo,
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
@@ -341,51 +341,51 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    # with timed(f'train xgboost with: {xgboost_args}...'):
-    #   if is_regression:
-    #     model = xgb.XGBRegressor(**xgboost_args)
-    #   else:
-    #     model = xgb.XGBClassifier(**xgboost_args)
-    #   model.fit(train_X, train_y)
+    with timed(f'train xgboost with: {xgboost_args}...'):
+      if is_regression:
+        model = xgb.XGBRegressor(**xgboost_args)
+      else:
+        model = xgb.XGBClassifier(**xgboost_args)
+      model.fit(train_X, train_y)
 
-    # with timed(f'predict xgboost...'):
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'predict xgboost...'):
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
-    # with timed(f'train lightgbm with: {lgb_args}...'):
-    #   if is_regression:
-    #     model = lgb.LGBMRegressor(**lgb_args)
-    #   else:
-    #     model = lgb.LGBMClassifier(**lgb_args)
-    #   model.fit(train_X, train_y)
+    with timed(f'train lightgbm with: {lgb_args}...'):
+      if is_regression:
+        model = lgb.LGBMRegressor(**lgb_args)
+      else:
+        model = lgb.LGBMClassifier(**lgb_args)
+      model.fit(train_X, train_y)
 
-    # with timed(f'predict lightgbm...'):
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'predict lightgbm...'):
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
-    # with timed('\ntrain BFS tree ...'):
-    #   # with profiled():
-    #   model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
-    # print(model.__str__(verbose=False))
+    with timed('\ntrain BFS tree ...'):
+      # with profiled():
+      model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
+    print(model.__str__(verbose=False))
 
-    # with timed(f'  predict BFS tree...'):
-    #   # with profiled():
-    #   train_preds = predict(model, train_X)
-    #   valid_preds = predict(model, valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'  predict BFS tree...'):
+      # with profiled():
+      train_preds = predict(model, train_X)
+      valid_preds = predict(model, valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
 
