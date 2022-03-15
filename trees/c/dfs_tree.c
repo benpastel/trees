@@ -12,6 +12,7 @@
 static PyObject* update_histograms(PyObject *self, PyObject *args);
 static PyObject* update_node_splits(PyObject *self, PyObject *args);
 static PyObject* update_memberships(PyObject *self, PyObject *args);
+static PyObject* update_memberships_T(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
 static PyObject* choose_bin(PyObject *self, PyObject *args);
 
@@ -19,6 +20,7 @@ static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     {"update_node_splits", update_node_splits, METH_VARARGS, ""},
     {"update_memberships", update_memberships, METH_VARARGS, ""},
+    {"update_memberships_T", update_memberships_T, METH_VARARGS, ""},
     {"eval_tree", eval_tree, METH_VARARGS, ""},
     {"choose_bin", choose_bin, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
@@ -26,7 +28,6 @@ static PyMethodDef Methods[] = {
 
 #define VERBOSE 0
 #define MIN_LEAF_SIZE 1 // TODO parameter
-#define BUCKETS 64 // TODO parameter
 
 // TODO: py deref objects everywhere
 
@@ -131,6 +132,56 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
     for (uint64_t p = 0; p < rows_in_parent; p++) {
         uint64_t r = parent_members[p];
         if (X[r * cols + col] <= val) {
+            // assign to left child
+            left_members[left++] = r;
+        } else {
+            // assign to right child
+            right_members[right++] = r;
+        }
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject* update_memberships_T(PyObject *dummy, PyObject *args)
+{
+    // Same as update_memberships but X is transposed
+    // For each row in parent, add to left or right child
+    PyObject *X_arg, *parent_members_arg, *left_members_arg, *right_members_arg;
+    int col_arg;
+    int val_arg;
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "O!O!O!O!ii",
+        &PyArray_Type, &X_arg,
+        &PyArray_Type, &parent_members_arg,
+        &PyArray_Type, &left_members_arg,
+        &PyArray_Type, &right_members_arg,
+        &col_arg,
+        &val_arg
+    )) return NULL;
+
+    PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *parent_members_obj = PyArray_FROM_OTF(parent_members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_members_obj = PyArray_FROM_OTF(left_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *right_members_obj = PyArray_FROM_OTF(right_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+
+    const uint64_t col = col_arg;
+    const uint8_t val = val_arg;
+    const uint64_t rows_in_parent = (uint64_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+
+    // cast data sections of numpy arrays to plain C pointers
+    // this assumes the arrays are C-order, aligned, non-strided
+    uint8_t *  __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
+    uint64_t * __restrict parent_members = PyArray_DATA((PyArrayObject *) parent_members_obj);
+    uint64_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
+    uint64_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
+
+    uint64_t left = 0;
+    uint64_t right = 0;
+    for (uint64_t p = 0; p < rows_in_parent; p++) {
+        uint64_t r = parent_members[p];
+        if (X[col * rows + r] <= val) {
             // assign to left child
             left_members[left++] = r;
         } else {
@@ -372,9 +423,10 @@ static PyObject* choose_bin(PyObject *dummy, PyObject *args)
     double *   __restrict y = PyArray_DATA((PyArrayObject *) y_obj);
 
     // build histograms indexed by [bucket]
-    uint32_t counts[BUCKETS] = {0};
-    double sums[BUCKETS] = {0};
-    double sum_sqs[BUCKETS] = {0};
+    // TODO take bucket count as input instead of 256
+    uint32_t counts[256] = {0};
+    double sums[256] = {0};
+    double sum_sqs[256] = {0};
     for (uint64_t r = 0; r < rows; r++) {
         uint8_t v = x[r];
         counts[v]++;
@@ -386,7 +438,7 @@ static PyObject* choose_bin(PyObject *dummy, PyObject *args)
     uint32_t total_count = 0;
     double total_sum = 0;
     double total_sum_sqs = 0;
-    for (uint64_t v = 0; v < BUCKETS; v++) {
+    for (uint64_t v = 0; v < 256; v++) {
         total_count += counts[v];
         total_sum += sums[v];
         total_sum_sqs += sum_sqs[v];
@@ -405,7 +457,7 @@ static PyObject* choose_bin(PyObject *dummy, PyObject *args)
 
     // v is a proposed split value; x <= v will go left
     // max value is vals - 2 so that x = (vals - 1) will go right
-    for (uint64_t v = 0; v < BUCKETS - 1; v++) {
+    for (uint64_t v = 0; v < 256; v++) {
         left_count += counts[v];
         left_sum += sums[v];
         left_sum_sqs += sum_sqs[v];

@@ -9,11 +9,12 @@ from trees.c.dfs_tree import (
   update_node_splits as c_update_node_splits,
   update_memberships as c_update_memberships,
   eval_tree as c_eval_tree,
-  choose_bin
+  choose_bin,
+  update_memberships_T
 )
 
 # A binary tree that grows best-node-first, like LightGBM
-# currently has no regularization and is all in python
+# currently has no regularization
 @dataclass
 class Tree:
   node_count: int
@@ -48,7 +49,7 @@ def fit_tree(
   max_nodes = params.dfs_max_nodes
   assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
 
-  sample_count = 2**16
+  sample_count = 2**20
 
   X_T = X.T.copy()
   if rows > sample_count:
@@ -88,7 +89,7 @@ def fit_tree(
   sample_hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
 
   # root count
-  # node_counts[0] = rows
+  node_counts[0] = rows
   sample_node_counts[0] = sample_rows
 
   # root histograms
@@ -124,9 +125,9 @@ def fit_tree(
     split_n = int(np.argmax(node_gains))
     split_c = int(split_cols[split_n])
     sample_split_bin = split_bins[split_n]
+
     # ignore the sample split bin, and recalculate from the full dataset
     in_node = memberships[split_n]
-
     split_bin, left_count = choose_bin(X_T[split_c, in_node], y[in_node])
 
     if _VERBOSE:
@@ -148,6 +149,9 @@ def fit_tree(
     # allocate new membership arrays
     sample_memberships[left_child] = np.zeros(sample_node_counts[left_child], dtype=np.uint64)
     sample_memberships[right_child] = np.zeros(sample_node_counts[right_child], dtype=np.uint64)
+    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
+    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
+
     c_update_memberships(
       sample_X,
       sample_memberships[split_n],
@@ -156,7 +160,16 @@ def fit_tree(
       split_c,
       split_bin,
     )
+    update_memberships_T(
+      X_T,
+      memberships[split_n],
+      memberships[left_child],
+      memberships[right_child],
+      split_c,
+      split_bin,
+    )
     del sample_memberships[split_n]
+    del memberships[split_n]
 
     # update histograms
     if sample_node_counts[left_child] < sample_node_counts[right_child]:
@@ -203,8 +216,8 @@ def fit_tree(
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
-  for n, leaf_members in sample_memberships.items():
-    node_means[n] = np.mean(sample_y[leaf_members])
+  for n, leaf_members in memberships.items():
+    node_means[n] = np.mean(y[leaf_members])
     preds[leaf_members] = node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
