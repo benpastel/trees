@@ -95,7 +95,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             double * __restrict local_sums = calloc(cols*vals, sizeof(double));
             double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
 
-            #pragma omp for
+            #pragma omp for nowait
             for (uint32_t i = 0; i < rows_in_node; i++) {
                 uint32_t r = memberships[i];
 
@@ -264,6 +264,7 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     uint64_t best_col = 0;
     uint8_t best_v = 0;
 
+    // parallelizing this for loop doesn't seem to gain anything, so single-threaded for now
     for (uint64_t c = 0; c < cols; c++) {
 
         // find the histogram totals for this column
