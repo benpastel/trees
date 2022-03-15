@@ -25,6 +25,7 @@ static PyMethodDef Methods[] = {
 #define VERBOSE 0
 #define MIN_LEAF_SIZE 1 // TODO parameter
 #define MIN_PARALLEL_SPLIT 1024
+#define SPLIT_BUF_SIZE 1024
 
 // TODO: py deref objects everywhere
 
@@ -164,16 +165,82 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
     uint64_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
     uint64_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
 
-    uint64_t left = 0;
-    uint64_t right = 0;
-    for (uint64_t p = 0; p < rows_in_parent; p++) {
-        uint64_t r = parent_members[p];
-        if (X[r * cols + col] <= val) {
-            // assign to left child
-            left_members[left++] = r;
-        } else {
-            // assign to right child
-            right_members[right++] = r;
+    uint64_t left_i = 0;
+    uint64_t right_i = 0;
+    if (rows_in_parent < MIN_PARALLEL_SPLIT) {
+        for (uint64_t p = 0; p < rows_in_parent; p++) {
+            uint64_t r = parent_members[p];
+            if (X[r * cols + col] <= val) {
+                // assign to left child
+                left_members[left_i++] = r;
+            } else {
+                // assign to right child
+                right_members[right_i++] = r;
+            }
+        }
+        Py_RETURN_NONE;
+    }
+    // otherwise, multi-threaded
+    //
+    // the order of rows doesn't matter
+    //
+    // aggregate a buffer within each thread
+    // once full, copy it into memberships
+    #pragma omp parallel
+    {
+        uint64_t left_buf [SPLIT_BUF_SIZE];
+        uint64_t right_buf [SPLIT_BUF_SIZE];
+
+        uint64_t local_left_i = 0;
+        uint64_t local_right_i = 0;
+
+        uint64_t copy_start;
+
+        #pragma omp for nowait
+        for (uint64_t p = 0; p < rows_in_parent; p++) {
+            uint64_t r = parent_members[p];
+
+            if (X[r * cols + col] <= val) {
+                left_buf[local_left_i++] = r;
+            } else {
+                right_buf[local_right_i++] = r;
+            }
+
+            if (local_left_i == SPLIT_BUF_SIZE) {
+                #pragma omp critical
+                {
+                    copy_start = left_i;
+                    left_i = copy_start + SPLIT_BUF_SIZE;
+                }
+                memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                local_left_i = 0;
+            }
+            if (local_right_i == SPLIT_BUF_SIZE) {
+                #pragma omp critical
+                {
+                    copy_start = right_i;
+                    right_i = copy_start + SPLIT_BUF_SIZE;
+                }
+                memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                local_right_i = 0;
+            }
+        }
+        // copy anything leftover in the buffers
+        if (local_left_i > 0) {
+            #pragma omp critical
+            {
+                copy_start = left_i;
+                left_i = copy_start + local_left_i;
+            }
+            memcpy(left_members + copy_start, left_buf, local_left_i * sizeof(uint64_t));
+        }
+        if (local_right_i > 0) {
+            #pragma omp critical
+            {
+                copy_start = right_i;
+                right_i = copy_start + local_right_i;
+            }
+            memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint64_t));
         }
     }
     Py_RETURN_NONE;
