@@ -11,13 +11,13 @@
 
 static PyObject* update_histograms(PyObject *self, PyObject *args);
 static PyObject* update_node_splits(PyObject *self, PyObject *args);
-static PyObject* update_memberships(PyObject *self, PyObject *args);
+static PyObject* update_members(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     {"update_node_splits", update_node_splits, METH_VARARGS, ""},
-    {"update_memberships", update_memberships, METH_VARARGS, ""},
+    {"update_members", update_members, METH_VARARGS, ""},
     {"eval_tree", eval_tree, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
@@ -31,22 +31,26 @@ static PyMethodDef Methods[] = {
 
 static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 {
-    PyObject *memberships_arg;
+    PyObject *members_arg;
     PyObject *X_arg, *y_arg;
     PyObject *hist_counts_arg, *hist_sums_arg, *hist_sum_sqs_arg;
     int node_arg;
+    uint64_t start_member_arg;
+    uint64_t rows_in_node_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!i",
-        &PyArray_Type, &memberships_arg,
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!iKK",
+        &PyArray_Type, &members_arg,
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &hist_counts_arg,
         &PyArray_Type, &hist_sums_arg,
         &PyArray_Type, &hist_sum_sqs_arg,
-        &node_arg)) return NULL;
+        &node_arg,
+        &start_member_arg,
+        &rows_in_node_arg)) return NULL;
 
-    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *members_obj = PyArray_FROM_OTF(members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
@@ -55,20 +59,21 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     const int node = node_arg;
-    const uint64_t rows_in_node = (uint64_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
+    const uint64_t rows_in_node = rows_in_node_arg;
+    const uint64_t start_member = start_member_arg;
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
-    double *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
-    uint64_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
+    uint8_t *  __restrict X       = PyArray_DATA((PyArrayObject *) X_obj);
+    double *   __restrict y       = PyArray_DATA((PyArrayObject *) y_obj);
+    uint64_t * __restrict members = PyArray_DATA((PyArrayObject *) members_obj);
 
     // the histograms are indexed [node, column, bucket]
-    uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
-    double * __restrict sums = PyArray_DATA((PyArrayObject *) hist_sums_obj);
-    double * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
+    uint32_t * __restrict counts  = PyArray_DATA((PyArrayObject *) hist_counts_obj);
+    double *   __restrict sums    = PyArray_DATA((PyArrayObject *) hist_sums_obj);
+    double *   __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
 
     // => [column, bucket]
     counts += node*cols*vals;
@@ -77,8 +82,8 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 
     if (rows_in_node < MIN_PARALLEL_SPLIT) {
         // build the histogram single-threaded
-        for (uint64_t i = 0; i < rows_in_node; i++) {
-            uint64_t r = memberships[i];
+        for (uint64_t i = start_member; i < rows_in_node; i++) {
+            uint64_t r = members[i];
 
             for (uint32_t c = 0; c < cols; c++) {
                 uint8_t v = X[r*cols + c];
@@ -97,8 +102,9 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
 
             if (node == 0) {
+                assert(start_member == 0);
                 // the root node histogram accounts for a lot of the final runtime
-                // as a slight optimization, we can skip the memberships lookup
+                // as a slight optimization, we can skip the members lookup
                 // because all rows belong to the root
                 #pragma omp for nowait
                 for (uint64_t r = 0; r < rows_in_node; r++) {
@@ -113,8 +119,8 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             } else {
                 // the general case: we need to look up which rows belong to the node
                 #pragma omp for nowait
-                for (uint64_t i = 0; i < rows_in_node; i++) {
-                    uint64_t r = memberships[i];
+                for (uint64_t i = start_member; i < rows_in_node; i++) {
+                    uint64_t r = members[i];
 
                     for (uint64_t c = 0; c < cols; c++) {
                         uint8_t v = X[r*cols + c];
@@ -149,116 +155,74 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static PyObject* update_memberships(PyObject *dummy, PyObject *args)
+static PyObject* update_members(PyObject *dummy, PyObject *args)
 {
     // For each row in parent, add to left or right child
-    PyObject *X_arg, *parent_members_arg, *left_members_arg, *right_members_arg;
+    PyObject *X_arg, *members_arg;
+    uint64_t parent_start_arg, left_count_arg, right_count_arg;
     int col_arg;
     int val_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!ii",
+    if (!PyArg_ParseTuple(args, "O!O!KKKii",
         &PyArray_Type, &X_arg,
-        &PyArray_Type, &parent_members_arg,
-        &PyArray_Type, &left_members_arg,
-        &PyArray_Type, &right_members_arg,
+        &PyArray_Type, &members_arg,
+        &parent_start_arg,
+        &left_count_arg,
+        &right_count_arg,
         &col_arg,
         &val_arg
     )) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    PyObject *parent_members_obj = PyArray_FROM_OTF(parent_members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *left_members_obj = PyArray_FROM_OTF(left_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
-    PyObject *right_members_obj = PyArray_FROM_OTF(right_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *members_obj = PyArray_FROM_OTF(members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
 
     const uint64_t col = col_arg;
     const uint8_t val = val_arg;
-    const uint64_t rows_in_parent = (uint64_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
+    const uint64_t parent_start = parent_start_arg;
+    const uint64_t left_count = left_count_arg;
+    const uint64_t right_count = right_count_arg;
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * __restrict parent_members = PyArray_DATA((PyArrayObject *) parent_members_obj);
-    uint64_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
-    uint64_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
+    uint64_t * __restrict members = PyArray_DATA((PyArrayObject *) members_obj);
 
-    uint64_t left_i = 0;
-    uint64_t right_i = 0;
-    if (rows_in_parent < MIN_PARALLEL_SPLIT) {
-        for (uint64_t p = 0; p < rows_in_parent; p++) {
-            uint64_t r = parent_members[p];
-            if (X[r * cols + col] <= val) {
-                // assign to left child
-                left_members[left_i++] = r;
-            } else {
-                // assign to right child
-                right_members[right_i++] = r;
-            }
+    uint64_t left_i = parent_start;
+    uint64_t right_i = parent_start + left_count;
+
+    const uint64_t left_end = parent_start + left_count;
+    const uint64_t right_end = parent_start + left_count + right_count;
+
+    // TODO optimize
+    // maybe it's better to keep a buffer of size (smaller side)
+    // and write either to members or the buffer as we go, then copy it?
+
+    while (left_i < left_end) {
+        assert(right_i < right_end);
+
+        // skip over any lefts that are correctly on the left side
+        uint64_t left_r = members[left_i];
+        while (X[left_r * cols + col] <= val && left_i < left_end) {
+            left_r = members[++left_i];
         }
-        Py_RETURN_NONE;
-    }
-    // otherwise, multi-threaded
-    //
-    // the order of rows doesn't matter
-    //
-    // aggregate a buffer within each thread
-    // once full, copy it into memberships
-    #pragma omp parallel
-    {
-        uint64_t left_buf [SPLIT_BUF_SIZE];
-        uint64_t right_buf [SPLIT_BUF_SIZE];
 
-        uint64_t local_left_i = 0;
-        uint64_t local_right_i = 0;
-
-        uint64_t copy_start;
-
-        #pragma omp for nowait
-        for (uint64_t p = 0; p < rows_in_parent; p++) {
-            uint64_t r = parent_members[p];
-
-            if (X[r * cols + col] <= val) {
-                left_buf[local_left_i++] = r;
-            } else {
-                right_buf[local_right_i++] = r;
-            }
-
-            if (local_left_i == SPLIT_BUF_SIZE) {
-                #pragma omp critical
-                {
-                    copy_start = left_i;
-                    left_i = copy_start + SPLIT_BUF_SIZE;
-                }
-                memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
-                local_left_i = 0;
-            }
-            if (local_right_i == SPLIT_BUF_SIZE) {
-                #pragma omp critical
-                {
-                    copy_start = right_i;
-                    right_i = copy_start + SPLIT_BUF_SIZE;
-                }
-                memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
-                local_right_i = 0;
-            }
+        // skip over any rights that are correctly on the right side
+        uint64_t right_r = members[right_i];
+        while (X[right_r * cols + col] > val && right_i < right_end) {
+            right_r = members[++right_i];
         }
-        // copy anything leftover in the buffers
-        if (local_left_i > 0) {
-            #pragma omp critical
-            {
-                copy_start = left_i;
-                left_i = copy_start + local_left_i;
-            }
-            memcpy(left_members + copy_start, left_buf, local_left_i * sizeof(uint64_t));
-        }
-        if (local_right_i > 0) {
-            #pragma omp critical
-            {
-                copy_start = right_i;
-                right_i = copy_start + local_right_i;
-            }
-            memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint64_t));
+
+        if (left_i < left_end) {
+            assert(right_i < right_end);
+            // swap them!
+            uint64_t temp = left_r;
+            members[left_r] = members[right_r];
+            members[right_r] = temp;
+            ++left_i;
+            ++right_i;
+
         }
     }
     Py_RETURN_NONE;

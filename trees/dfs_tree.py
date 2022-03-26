@@ -7,7 +7,7 @@ from trees.params import Params
 from trees.c.dfs_tree import (
   update_histograms as c_update_histograms,
   update_node_splits as c_update_node_splits,
-  update_memberships as c_update_memberships,
+  update_members as c_update_members,
   eval_tree as c_eval_tree,
 )
 
@@ -51,15 +51,22 @@ def fit_tree(
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
 
-  # node => array of rows belonging to it
-  # initially all rows belong to root (0)
-  memberships = {0: np.arange(rows, dtype=np.uint64)}
-
   # node stats:
   #   - count of rows in the node
   #   - best gain from splitting at this node
   node_counts = np.zeros(max_nodes, dtype=np.uint64)
   node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+
+  # root count
+  node_counts[0] = rows
+
+  # members contains the indices of all rows in X
+  # start_members points the start of each node's members
+  # so members[start_members[n]: start_members[n]+node_counts[n]] is the rows in n
+  # initially, all rows belong the root (0)
+  # TODO: figure out how to pass that slice directly into C
+  members = np.arange(rows, dtype=np.uint64)
+  start_members = {0: 0}
 
   # histograms
   # node, col, val => stat where X[c] == val in this node
@@ -71,11 +78,8 @@ def fit_tree(
   hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
   hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
 
-  # root count
-  node_counts[0] = rows
-
   # root histograms
-  c_update_histograms(memberships[0], X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
+  c_update_histograms(members, X, y, hist_counts, hist_sums, hist_sum_sqs, 0, 0, int(node_counts[0]))
 
   # root node
   c_update_node_splits(
@@ -97,7 +101,6 @@ def fit_tree(
     # can split leaves with enough data
     can_split_node = (node_counts >= 2) & (left_children == 0)
     node_gains[~can_split_node] = -np.inf
-
 
     if node_gains.max() <= 0:
       # can't improve anymore
@@ -122,23 +125,27 @@ def fit_tree(
     node_counts[left_child] = hist_counts[split_n, split_c, :split_bin+1].sum()
     node_counts[right_child] = node_counts[split_n] - node_counts[left_child]
 
-    # allocate new membership arrays
-    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
-    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
-    c_update_memberships(
+    # swap around the parent members so the left members are on the left
+    # and the right members are on the right
+    c_update_members(
       X,
-      memberships[split_n],
-      memberships[left_child],
-      memberships[right_child],
+      members,
+      start_members[split_n],
+      int(node_counts[left_child]),
+      int(node_counts[right_child]),
       split_c,
       split_bin,
     )
-    del memberships[split_n]
+    start_members[left_child] = start_members[split_n]
+    start_members[right_child] = start_members[split_n] + int(node_counts[left_child])
 
     # update histograms
     if node_counts[left_child] < node_counts[right_child]:
       # calculate left
-      c_update_histograms(memberships[left_child], X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
+      c_update_histograms(
+        members, X, y,
+        hist_counts, hist_sums, hist_sum_sqs,
+        left_child, start_members[left_child], int(node_counts[left_child]))
 
       # find right via subtraction
       hist_counts[right_child] = hist_counts[split_n] - hist_counts[left_child]
@@ -146,7 +153,10 @@ def fit_tree(
       hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
     else:
       # calculate right
-      c_update_histograms(memberships[right_child], X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
+      c_update_histograms(
+        members, X, y,
+        hist_counts, hist_sums, hist_sum_sqs,
+        right_child, start_members[right_child], int(node_counts[right_child]))
 
       # find left via subtraction
       hist_counts[left_child] = hist_counts[split_n] - hist_counts[right_child]
@@ -180,7 +190,8 @@ def fit_tree(
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
-  for n, leaf_members in memberships.items():
+  for n, start in start_members.items():
+    leaf_members = members[start:start + int(node_counts[n])]
     node_means[n] = np.mean(y[leaf_members])
     preds[leaf_members] = node_means[n]
 

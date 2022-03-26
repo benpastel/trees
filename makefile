@@ -14,7 +14,7 @@ build: lint
 
 .PHONY: test
 test: build
-	python -m pytest
+	python -u -m pytest
 
 .PHONY: run
 run: build test
