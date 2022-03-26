@@ -96,16 +96,33 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             double * __restrict local_sums = calloc(cols*vals, sizeof(double));
             double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
 
-            #pragma omp for nowait
-            for (uint32_t i = 0; i < rows_in_node; i++) {
-                uint32_t r = memberships[i];
+            if (node == 0) {
+                // the root node histogram accounts for a lot of the final runtime
+                // as a slight optimization, we can skip the memberships lookup
+                // because all rows belong to the root
+                #pragma omp for nowait
+                for (uint64_t r = 0; r < rows_in_node; r++) {
+                    for (uint64_t c = 0; c < cols; c++) {
+                        uint8_t v = X[r*cols + c];
+                        uint64_t idx = c*vals + v;
+                        local_counts[idx]++;
+                        local_sums[idx] += y[r];
+                        local_sum_sqs[idx] += y[r]*y[r];
+                    }
+                }
+            } else {
+                // the general case: we need to look up which rows belong to the node
+                #pragma omp for nowait
+                for (uint64_t i = 0; i < rows_in_node; i++) {
+                    uint64_t r = memberships[i];
 
-                for (uint32_t c = 0; c < cols; c++) {
-                    uint8_t v = X[r*cols + c];
-                    uint64_t idx = c*vals + v;
-                    local_counts[idx]++;
-                    local_sums[idx] += y[r];
-                    local_sum_sqs[idx] += y[r]*y[r];
+                    for (uint64_t c = 0; c < cols; c++) {
+                        uint8_t v = X[r*cols + c];
+                        uint64_t idx = c*vals + v;
+                        local_counts[idx]++;
+                        local_sums[idx] += y[r];
+                        local_sum_sqs[idx] += y[r]*y[r];
+                    }
                 }
             }
 
@@ -115,7 +132,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             //  ... or fix a multiple?  32 x [1-8]?
             #pragma omp critical
             {
-                for (uint32_t c = 0; c < cols; c++) {
+                for (uint64_t c = 0; c < cols; c++) {
                     for (uint v = 0; v < vals; v++) {
                         uint64_t i = c*vals + v;
                         counts[i] += local_counts[i];
