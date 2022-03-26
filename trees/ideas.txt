@@ -3,19 +3,8 @@
 - switch to binary trees, but allowing low <= v < hi splits... for that histogram efficiency gain?
   => circular, with NaN in between?
 
-- switch to best-split-first
-
 - keep exploring "parent mean" idea
 
-- keep exploring including whether to build next tree in the best-split-first decision
-
-
-EXPLORE / REFINE:
-  1. for each tree, sample a subset for bucketing
-  2. bucket both the subset & full set
-  3. for each split:
-    - for all features, build hist for subset
-    - choose feature to split
-    - for that feature, build hist for full node
-    - choose split value based on full hist
+- try modifying parent membership for the larger side of the split instead of writing new one
+  e.g. if left_count is smaller, read right examples off the back until you see left_count of them, swap those out for the left_count holes, then truncate?
 

@@ -112,6 +112,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             // add the histograms together
             // TODO try atomic
             //  and/or fix the values so we can vectorize
+            //  ... or fix a multiple?  32 x [1-8]?
             #pragma omp critical
             {
                 for (uint32_t c = 0; c < cols; c++) {
