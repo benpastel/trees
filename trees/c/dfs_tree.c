@@ -59,8 +59,8 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     const int node = node_arg;
-    const uint64_t rows_in_node = rows_in_node_arg;
     const uint64_t start_member = start_member_arg;
+    const uint64_t rows_in_node = rows_in_node_arg;
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
@@ -82,7 +82,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 
     if (rows_in_node < MIN_PARALLEL_SPLIT) {
         // build the histogram single-threaded
-        for (uint64_t i = start_member; i < rows_in_node; i++) {
+        for (uint64_t i = start_member; i < start_member+rows_in_node; i++) {
             uint64_t r = members[i];
 
             for (uint32_t c = 0; c < cols; c++) {
@@ -119,7 +119,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             } else {
                 // the general case: we need to look up which rows belong to the node
                 #pragma omp for nowait
-                for (uint64_t i = start_member; i < rows_in_node; i++) {
+                for (uint64_t i = start_member; i < start_member+rows_in_node; i++) {
                     uint64_t r = members[i];
 
                     for (uint64_t c = 0; c < cols; c++) {

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from typing import Optional, List, Tuple
 
@@ -25,9 +26,8 @@ class Tree:
   left_children: np.ndarray
   node_means: np.ndarray
 
-
-_VERBOSE = False
-
+# set VERBOSE=1 when debugging
+_VERBOSE = bool(os.environ.get('VERBOSE', '0'))
 
 def fit_tree(
     X: np.ndarray,
@@ -111,10 +111,6 @@ def fit_tree(
     split_c = int(split_cols[split_n])
     split_bin = split_bins[split_n]
 
-    if _VERBOSE:
-      print(f"best gain: {node_gains.max()}")
-      print(f"split: {split_n, split_c, split_bin}")
-
     # make the split
     left_children[split_n] = left_child = node_count
     right_child = node_count + 1
@@ -125,8 +121,17 @@ def fit_tree(
     node_counts[left_child] = hist_counts[split_n, split_c, :split_bin+1].sum()
     node_counts[right_child] = node_counts[split_n] - node_counts[left_child]
 
+    if _VERBOSE:
+      print(f"best gain: {node_gains.max()}")
+      print(f"split: {split_n, split_c, split_bin}")
+      print(f"{node_counts[left_child]} going left, {node_counts[right_child]} going right")
+    assert node_counts[left_child] >= 1 and node_counts[right_child] >= 1
+
     # swap around the parent members so the left members are on the left
     # and the right members are on the right
+    if _VERBOSE:
+      print(f"members before: {members}")
+      print(f"parent members: {members[start_members[split_n]:start_members[split_n]+int(node_counts[split_n])]}")
     c_update_members(
       X,
       members,
@@ -138,6 +143,10 @@ def fit_tree(
     )
     start_members[left_child] = start_members[split_n]
     start_members[right_child] = start_members[split_n] + int(node_counts[left_child])
+    if _VERBOSE:
+      print(f"members after: {members}")
+      print(f"left members: {members[start_members[left_child]:start_members[left_child]+int(node_counts[left_child])]}")
+      print(f"right members: {members[start_members[right_child]:start_members[right_child]+int(node_counts[right_child])]}")
 
     # update histograms
     if node_counts[left_child] < node_counts[right_child]:
