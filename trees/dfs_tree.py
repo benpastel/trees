@@ -79,7 +79,7 @@ def fit_tree(
   hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
 
   # root histograms
-  c_update_histograms(members, X, y, hist_counts, hist_sums, hist_sum_sqs, 0, 0, int(node_counts[0]))
+  c_update_histograms(members, X, y, hist_counts, hist_sums, hist_sum_sqs, 0, 0, rows)
 
   # root node
   c_update_node_splits(

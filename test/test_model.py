@@ -45,11 +45,9 @@ def test_model_with_dfs():
   preds_from_predict = predict(model, X)
   assert_array_almost_equal(preds_from_fit2, preds_from_predict)
 
-  # python-only dfs tree is too slow to fit this many
-  # TODO: add back in once it's in C
-  # model, preds_from_fit10 = fit(X, y, Params(use_bfs_tree=False, tree_count=10, learning_rate=1.0, smooth_factor=0.0, bucket_count=256))
-  # preds_from_predict = predict(model, X)
-  # assert_array_almost_equal(preds_from_fit10, preds_from_predict)
+  model, preds_from_fit10 = fit(X, y, Params(use_bfs_tree=False, dfs_max_nodes=3, tree_count=10, learning_rate=1.0, bucket_count=256))
+  preds_from_predict = predict(model, X)
+  assert_array_almost_equal(preds_from_fit10, preds_from_predict)
 
   model, preds_from_fit3 = fit(X, y, Params(use_bfs_tree=False, dfs_max_nodes=64, tree_count=1, learning_rate=1.0, bucket_count=256))
   preds_from_predict = predict(model, X)
@@ -61,6 +59,9 @@ def test_model_with_dfs():
 
   loss_2 = np.sum(np.abs(y - preds_from_fit2))
   assert loss_1 < loss_2, "training loss should increase with fewer buckets"
+
+  loss_10 = np.sum(np.abs(y - preds_from_fit10))
+  assert loss_10 < loss_1, "training loss should decrease with more trees"
 
 
 

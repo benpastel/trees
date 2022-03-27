@@ -217,12 +217,8 @@ static PyObject* update_members(PyObject *dummy, PyObject *args)
         if (left_i < left_end) {
             assert(right_i < right_end);
             // swap them!
-            uint64_t temp = left_r;
-            members[left_r] = members[right_r];
-            members[right_r] = temp;
-            ++left_i;
-            ++right_i;
-
+            members[left_i++] = right_r;
+            members[right_i++] = left_r;
         }
     }
     Py_RETURN_NONE;
