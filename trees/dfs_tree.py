@@ -51,9 +51,14 @@ def fit_tree(
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
 
-  # node => array of rows belonging to it
+  # node => (
+  #   X rows in node,
+  #   y rows in node,
+  #   tombstone mask marking rows as removed
+  # )
   # initially all rows belong to root (0)
-  memberships = {0: np.arange(rows, dtype=np.uint64)}
+  root_removed = np.zeros(rows, dtype=bool)
+  memberships = {0: (X, y, root_removed)}
 
   # node stats:
   #   - count of rows in the node
@@ -75,6 +80,7 @@ def fit_tree(
   node_counts[0] = rows
 
   # root histograms
+  # TODO: memberships different
   c_update_histograms(memberships[0], X, y, hist_counts, hist_sums, hist_sum_sqs, 0)
 
   # root node
@@ -97,7 +103,6 @@ def fit_tree(
     # can split leaves with enough data
     can_split_node = (node_counts >= 2) & (left_children == 0)
     node_gains[~can_split_node] = -np.inf
-
 
     if node_gains.max() <= 0:
       # can't improve anymore
@@ -122,57 +127,68 @@ def fit_tree(
     node_counts[left_child] = hist_counts[split_n, split_c, :split_bin+1].sum()
     node_counts[right_child] = node_counts[split_n] - node_counts[left_child]
 
-    # allocate new membership arrays
-    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
-    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
-    c_update_memberships(
-      X,
-      memberships[split_n],
-      memberships[left_child],
-      memberships[right_child],
-      split_c,
-      split_bin,
-    )
-    del memberships[split_n]
+    # TODO: replace below with:
 
-    # update histograms
+    # write the
     if node_counts[left_child] < node_counts[right_child]:
-      # calculate left
-      c_update_histograms(memberships[left_child], X, y, hist_counts, hist_sums, hist_sum_sqs, left_child)
+      # TODO:
+      #   - write the left members to a new node
+      #   - tombstone them in the old node
+      #   - count left histogram while we do it
+      left_X = np.zeros((node_counts[left_child], cols), dtype=X.dtype)
+      left_y = np.zeros(node_counts[left_child], dtype=y.dtype)
+      # c_partition_and_count(
+      #   left = True,
+      #   reads:
+      #     parent_X, parent_y, parent_removed,
+      #     split_c, split_bin
+      #   updates:
+      #     left_X,
+      #     left_y,
+      #     parent_removed,
+      #     hist stuff,
+      #
+      # TODO:
+      #   - point right to parent
 
-      # find right via subtraction
+      # find right histograms via subtraction
       hist_counts[right_child] = hist_counts[split_n] - hist_counts[left_child]
       hist_sums[right_child] = hist_sums[split_n] - hist_sums[left_child]
       hist_sum_sqs[right_child] = hist_sum_sqs[split_n] - hist_sum_sqs[left_child]
-    else:
-      # calculate right
-      c_update_histograms(memberships[right_child], X, y, hist_counts, hist_sums, hist_sum_sqs, right_child)
 
-      # find left via subtraction
+    else:
+      # TODO:
+      #   - write the right members to a new node
+      #   - tombstone them in the old node
+      #   - count left histogram while we do it
+      #   - point left to old node
+      # c_partition_and_count
+
+      # update left histograms via subtraction
       hist_counts[left_child] = hist_counts[split_n] - hist_counts[right_child]
       hist_sums[left_child] = hist_sums[split_n] - hist_sums[right_child]
       hist_sum_sqs[left_child] = hist_sum_sqs[split_n] - hist_sum_sqs[right_child]
 
-    # find the best splits for each new node
-    c_update_node_splits(
-      hist_counts,
-      hist_sums,
-      hist_sum_sqs,
-      node_gains,
-      split_cols,
-      split_bins,
-      left_child,
-    )
+      # find the best splits for each new node
+      c_update_node_splits(
+        hist_counts,
+        hist_sums,
+        hist_sum_sqs,
+        node_gains,
+        split_cols,
+        split_bins,
+        left_child,
+      )
 
-    c_update_node_splits(
-      hist_counts,
-      hist_sums,
-      hist_sum_sqs,
-      node_gains,
-      split_cols,
-      split_bins,
-      right_child,
-    )
+      c_update_node_splits(
+        hist_counts,
+        hist_sums,
+        hist_sum_sqs,
+        node_gains,
+        split_cols,
+        split_bins,
+        right_child,
+      )
 
   # finished growing the tree
 
@@ -180,9 +196,12 @@ def fit_tree(
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
-  for n, leaf_members in memberships.items():
-    node_means[n] = np.mean(y[leaf_members])
-    preds[leaf_members] = node_means[n]
+
+  # TODO: CHANGE
+  #   will need to average over y's with tombstones
+  # for n, leaf_members in memberships.items():
+  #   node_means[n] = np.mean(y[leaf_members])
+  #   preds[leaf_members] = node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
   split_vals = np.zeros(node_count, dtype=np.float32)
