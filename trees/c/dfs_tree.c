@@ -31,14 +31,12 @@ static PyMethodDef Methods[] = {
 
 static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 {
-    PyObject *memberships_arg;
     PyObject *X_arg, *y_arg;
     PyObject *hist_counts_arg, *hist_sums_arg, *hist_sum_sqs_arg;
     int node_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!i",
-        &PyArray_Type, &memberships_arg,
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!i",
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &hist_counts_arg,
@@ -46,7 +44,6 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
         &PyArray_Type, &hist_sum_sqs_arg,
         &node_arg)) return NULL;
 
-    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
@@ -55,7 +52,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     const int node = node_arg;
-    const uint64_t rows_in_node = (uint64_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
     const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
@@ -63,7 +60,6 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
     double *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
-    uint64_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
 
     // the histograms are indexed [node, column, bucket]
     uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
@@ -75,11 +71,9 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     sums += node*cols*vals;
     sum_sqs += node*cols*vals;
 
-    if (rows_in_node < MIN_PARALLEL_SPLIT) {
+    if (rows < MIN_PARALLEL_SPLIT) {
         // build the histogram single-threaded
-        for (uint64_t i = 0; i < rows_in_node; i++) {
-            uint64_t r = memberships[i];
-
+        for (uint64_t r = 0; r < rows; r++) {
             for (uint32_t c = 0; c < cols; c++) {
                 uint8_t v = X[r*cols + c];
                 uint64_t idx = c*vals + v;
@@ -96,33 +90,14 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             double * __restrict local_sums = calloc(cols*vals, sizeof(double));
             double * __restrict local_sum_sqs = calloc(cols*vals, sizeof(double));
 
-            if (node == 0) {
-                // the root node histogram accounts for a lot of the final runtime
-                // as a slight optimization, we can skip the memberships lookup
-                // because all rows belong to the root
-                #pragma omp for nowait
-                for (uint64_t r = 0; r < rows_in_node; r++) {
-                    for (uint64_t c = 0; c < cols; c++) {
-                        uint8_t v = X[r*cols + c];
-                        uint64_t idx = c*vals + v;
-                        local_counts[idx]++;
-                        local_sums[idx] += y[r];
-                        local_sum_sqs[idx] += y[r]*y[r];
-                    }
-                }
-            } else {
-                // the general case: we need to look up which rows belong to the node
-                #pragma omp for nowait
-                for (uint64_t i = 0; i < rows_in_node; i++) {
-                    uint64_t r = memberships[i];
-
-                    for (uint64_t c = 0; c < cols; c++) {
-                        uint8_t v = X[r*cols + c];
-                        uint64_t idx = c*vals + v;
-                        local_counts[idx]++;
-                        local_sums[idx] += y[r];
-                        local_sum_sqs[idx] += y[r]*y[r];
-                    }
+            #pragma omp for nowait
+            for (uint64_t r = 0; r < rows; r++) {
+                for (uint64_t c = 0; c < cols; c++) {
+                    uint8_t v = X[r*cols + c];
+                    uint64_t idx = c*vals + v;
+                    local_counts[idx]++;
+                    local_sums[idx] += y[r];
+                    local_sum_sqs[idx] += y[r]*y[r];
                 }
             }
 
