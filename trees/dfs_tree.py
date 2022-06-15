@@ -66,15 +66,15 @@ def partition(
   assert (child_rows,) == child_y.shape == child_indices.shape
 
   if is_left:
-    in_child = (parent_X[~parent_is_removed, split_c] <= split_bin)
+    in_child = (~parent_is_removed) & (parent_X[:, split_c] <= split_bin)
   else:
-    in_child = (parent_X[~parent_is_removed, split_c] > split_bin)
+    in_child = (~parent_is_removed) & (parent_X[:, split_c] > split_bin)
   assert np.count_nonzero(in_child) == child_rows
 
   # partition child rows
   child_X[:] = parent_X[in_child, :]
   child_y[:] = parent_y[in_child]
-  child_indices = parent_indices[in_child]
+  child_indices[:] = parent_indices[in_child]
 
   # we're going to reuse parent for the other node
   # with the child rows removed
@@ -252,26 +252,25 @@ def fit_tree(
       hist_sums[left_n] = hist_sums[split_n] - hist_sums[right_n]
       hist_sum_sqs[left_n] = hist_sum_sqs[split_n] - hist_sum_sqs[right_n]
 
-      # find the best splits for each new node
-      c_update_node_splits(
-        hist_counts,
-        hist_sums,
-        hist_sum_sqs,
-        node_gains,
-        split_cols,
-        split_bins,
-        left_n,
-      )
-
-      c_update_node_splits(
-        hist_counts,
-        hist_sums,
-        hist_sum_sqs,
-        node_gains,
-        split_cols,
-        split_bins,
-        right_n,
-      )
+    # find the best splits for each new node
+    c_update_node_splits(
+      hist_counts,
+      hist_sums,
+      hist_sum_sqs,
+      node_gains,
+      split_cols,
+      split_bins,
+      left_n,
+    )
+    c_update_node_splits(
+      hist_counts,
+      hist_sums,
+      hist_sum_sqs,
+      node_gains,
+      split_cols,
+      split_bins,
+      right_n,
+    )
 
   # finished growing the tree
 
@@ -280,8 +279,6 @@ def fit_tree(
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
 
-  # TODO: CHANGE
-  #   will need to average over y's with tombstones
   for n, node in nodes.items():
     node_means[n] = np.mean(node.y[~node.is_removed])
     leaf_members = node.indices[~node.is_removed]
