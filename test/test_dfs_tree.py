@@ -6,7 +6,11 @@ from numpy.testing import assert_array_equal, assert_array_almost_equal
 from trees.dfs_tree import fit_tree, eval_tree, Tree
 from trees.params import Params
 
-from trees.c.dfs_tree import update_node_splits as c_update_node_splits
+from trees.c.dfs_tree import (
+  update_node_splits as c_update_node_splits,
+  copy_smaller as c_copy_smaller,
+)
+
 from test.python_stubs import update_node_splits as py_update_node_splits, variance
 
 def test_c_update_nodes():
@@ -32,6 +36,68 @@ def test_c_update_nodes():
   assert_array_almost_equal(py_node_gains, c_node_gains)
   assert_array_equal(py_split_cols, c_split_cols)
   assert_array_equal(py_split_bins, c_split_bins)
+
+
+def test_c_copy_smaller():
+  # TODO: also big test against stub to check multithreaded version
+
+  # inputs
+  split_c = 1
+  split_val = 4
+  is_left = True;
+  parent_X = np.array([
+    [1, 2],
+    [3, 4],
+    [5, 6],
+    [7, 8],
+  ], dtype = np.uint8)
+  parent_y = np.array([
+    10,
+    11,
+    12,
+    13,
+  ], dtype = np.double)
+  parent_indices = np.array([
+    5,
+    6,
+    7,
+    8,
+  ], dtype = np.uint64);
+
+  # input & output
+  parent_is_removed = np.array([
+    True,
+    False,
+    False,
+    False,
+  ], dtype = np.bool)
+
+  # outputs
+  child_X = np.zeros((1, 2), dtype=np.uint8)
+  child_y = np.zeros((1,), dtype=np.double)
+  child_indices = np.zeros((1,), dtype=np.uint64)
+
+  c_copy_smaller(
+    split_c,
+    split_val,
+    parent_X,
+    parent_y,
+    parent_indices,
+    parent_is_removed,
+    child_X,
+    child_y,
+    child_indices,
+    is_left
+  )
+  assert_array_equal(parent_is_removed, np.array([
+    True,
+    True,
+    False,
+    False,
+  ], dtype = np.bool))
+  assert_array_equal(child_X, np.array([[3, 4]], dtype = np.uint8))
+  assert_array_almost_equal(child_y, np.array([11], dtype = np.double))
+  assert_array_equal(child_indices, np.array([6], dtype = np.uint64))
 
 
 def test_fit_tree_simple():

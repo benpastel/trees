@@ -12,12 +12,14 @@
 static PyObject* update_histograms(PyObject *self, PyObject *args);
 static PyObject* update_node_splits(PyObject *self, PyObject *args);
 static PyObject* update_memberships(PyObject *self, PyObject *args);
+static PyObject* copy_smaller(PyObject *self, PyObject *args);
 static PyObject* eval_tree(PyObject *self, PyObject *args);
 
 static PyMethodDef Methods[] = {
     {"update_histograms", update_histograms, METH_VARARGS, ""},
     {"update_node_splits", update_node_splits, METH_VARARGS, ""},
     {"update_memberships", update_memberships, METH_VARARGS, ""},
+    {"copy_smaller", copy_smaller, METH_VARARGS, ""},
     {"eval_tree", eval_tree, METH_VARARGS, ""},
     {NULL, NULL, 0, NULL}
 };
@@ -236,6 +238,171 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
             memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint64_t));
         }
     }
+    Py_RETURN_NONE;
+}
+
+
+static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
+{
+    int col_arg;
+    int val_arg;
+    PyObject *parent_X_arg;
+    PyObject *parent_y_arg;
+    PyObject *parent_indices_arg;
+    PyObject *parent_is_removed_arg;
+    PyObject *child_X_arg;
+    PyObject *child_y_arg;
+    PyObject *child_indices_arg;
+    int is_left_arg;
+
+    // parse input arguments
+    if (!PyArg_ParseTuple(args, "iiO!O!O!O!O!O!O!i",
+        &col_arg,
+        &val_arg,
+        &PyArray_Type, &parent_X_arg,
+        &PyArray_Type, &parent_y_arg,
+        &PyArray_Type, &parent_indices_arg,
+        &PyArray_Type, &parent_is_removed_arg,
+        &PyArray_Type, &child_X_arg,
+        &PyArray_Type, &child_y_arg,
+        &PyArray_Type, &child_indices_arg,
+        &is_left_arg
+    )) return NULL;
+
+    const uint64_t col = col_arg;
+    const uint8_t val = val_arg;
+    PyObject *parent_X_obj = PyArray_FROM_OTF(parent_X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+    PyObject *parent_y_obj = PyArray_FROM_OTF(parent_y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyObject *parent_indices_obj = PyArray_FROM_OTF(parent_indices_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *parent_is_removed_obj = PyArray_FROM_OTF(parent_is_removed_arg, NPY_BOOL, NPY_ARRAY_INOUT_ARRAY);
+    PyObject *child_X_obj = PyArray_FROM_OTF(child_X_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
+    PyObject *child_y_obj = PyArray_FROM_OTF(child_y_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
+    PyObject *child_indices_obj = PyArray_FROM_OTF(child_indices_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    const bool is_left = (bool) is_left_arg;
+
+    const uint64_t parent_rows = (uint64_t) PyArray_DIM((PyArrayObject *) parent_X_obj, 0);
+    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) parent_X_obj, 1);
+    const uint64_t child_rows = (uint64_t) PyArray_DIM((PyArrayObject *) child_X_obj, 0);
+
+    assert(cols == (uint64_t) PyArray_DIM((PyArrayObject *) child_X_obj, 1));
+    assert(parent_rows == (uint64_t) PyArray_DIM((PyArrayObject *) parent_y_obj, 0));
+    assert(parent_rows == (uint64_t) PyArray_DIM((PyArrayObject *) parent_indices_obj, 0));
+    assert(parent_rows == (uint64_t) PyArray_DIM((PyArrayObject *) parent_is_removed_obj, 0));
+    assert(child_rows == (uint64_t) PyArray_DIM((PyArrayObject *) child_y_obj, 0));
+    assert(child_rows == (uint64_t) PyArray_DIM((PyArrayObject *) child_indices_obj, 0));
+    assert(col <= cols);
+
+    uint8_t  * __restrict parent_X = PyArray_DATA((PyArrayObject *) parent_X_obj);
+    double   * __restrict parent_y = PyArray_DATA((PyArrayObject *) parent_y_obj);
+    uint64_t * __restrict parent_indices = PyArray_DATA((PyArrayObject *) parent_indices_obj);
+    bool     * __restrict parent_is_removed = PyArray_DATA((PyArrayObject *) parent_is_removed_obj);
+    uint8_t  * __restrict child_X = PyArray_DATA((PyArrayObject *) child_X_obj);
+    double   * __restrict child_y = PyArray_DATA((PyArrayObject *) child_y_obj);
+    uint64_t * __restrict child_indices = PyArray_DATA((PyArrayObject *) child_indices_obj);
+
+    uint64_t child_r = 0;
+    if (parent_rows < MIN_PARALLEL_SPLIT) {
+        if (is_left) {
+            for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
+                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val) {
+                    // copy to child
+                    // TODO also update histograms here
+                    for (uint64_t c = 0; c < cols; c++) {
+                        child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
+                    }
+                    child_y[child_r] = parent_y[parent_r];
+                    child_indices[child_r] = parent_indices[parent_r];
+                    parent_is_removed[parent_r] = true;
+                    child_r++;
+                }
+            }
+        } else {
+            // same as above but the val comparison is flipped
+            for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
+                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val) {
+                    // copy to child
+                    // TODO also update histograms here
+                    for (uint64_t c = 0; c < cols; c++) {
+                        child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
+                    }
+                    child_y[child_r] = parent_y[parent_r];
+                    child_indices[child_r] = parent_indices[parent_r];
+                    parent_is_removed[parent_r] = true;
+                    child_r++;
+                }
+            }
+        }
+        assert(child_r == child_rows);
+        Py_RETURN_NONE;
+    }
+    // otherwise, multi-threaded
+    //
+    // the order of rows doesn't matter
+    //
+    // aggregate output buffers within each thread
+    // once full, copy them
+    #pragma omp parallel
+    {
+        uint8_t buf_X [SPLIT_BUF_SIZE * cols];
+        double buf_y [SPLIT_BUF_SIZE];
+        uint64_t buf_indices [SPLIT_BUF_SIZE];
+
+        uint64_t local_child_r = 0;
+
+        uint64_t copy_start;
+
+        #pragma omp for nowait
+        for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
+
+            if (is_left) {
+                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val) {
+                    // copy into buffer
+                    for (uint64_t c = 0; c < cols; c++) {
+                        buf_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
+                    }
+                    buf_y[local_child_r] = parent_y[parent_r];
+                    buf_indices[local_child_r] = parent_indices[parent_r];
+                    parent_is_removed[parent_r] = true;
+                    local_child_r++;
+                }
+            } else {
+                // same as above but val comparison flipped
+                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val) {
+                    for (uint64_t c = 0; c < cols; c++) {
+                        buf_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
+                    }
+                    buf_y[local_child_r] = parent_y[parent_r];
+                    buf_indices[local_child_r] = parent_indices[parent_r];
+                    parent_is_removed[parent_r] = true;
+                    local_child_r++;
+                }
+            }
+
+            if (local_child_r == SPLIT_BUF_SIZE) {
+                #pragma omp critical
+                {
+                    copy_start = child_r;
+                    child_r = copy_start + SPLIT_BUF_SIZE;
+                }
+                memcpy(child_X + (copy_start * cols), buf_X, SPLIT_BUF_SIZE * cols * sizeof(uint8_t));
+                memcpy(child_y + copy_start, buf_y, SPLIT_BUF_SIZE * sizeof(double));
+                memcpy(child_indices + copy_start, buf_indices, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                local_child_r = 0;
+            }
+        }
+        // copy anything leftover in the buffers
+        if (local_child_r > 0) {
+            #pragma omp critical
+            {
+                copy_start = child_r;
+                child_r = copy_start + local_child_r;
+            }
+            memcpy(child_X + (copy_start * cols), buf_X, local_child_r * cols * sizeof(uint8_t));
+            memcpy(child_y + copy_start, buf_y, local_child_r * sizeof(double));
+            memcpy(child_indices + copy_start, buf_indices, local_child_r * sizeof(uint64_t));
+        }
+    }
+    assert(child_r == child_rows);
     Py_RETURN_NONE;
 }
 

@@ -9,6 +9,7 @@ from trees.c.dfs_tree import (
   update_node_splits as c_update_node_splits,
   update_memberships as c_update_memberships,
   eval_tree as c_eval_tree,
+  copy_smaller as c_copy_smaller,
 )
 
 # A binary tree that grows best-node-first, like LightGBM
@@ -43,42 +44,6 @@ class Node:
 
 
 _VERBOSE = False
-
-
-# TODO: in C
-def partition(
-  split_c: int,
-  split_bin: int,
-  parent_X: np.ndarray,
-  parent_y: np.ndarray,
-  parent_indices: np.ndarray,
-  parent_is_removed: np.ndarray,
-  child_X: np.ndarray,
-  child_y: np.ndarray,
-  child_indices: np.ndarray,
-  is_left: bool
-) -> None:
-  parent_rows, cols = parent_X.shape
-  child_rows, child_cols = child_X.shape
-  assert child_rows < parent_rows
-  assert child_cols == cols
-  assert (parent_rows,) == parent_y.shape == parent_indices.shape == parent_is_removed.shape
-  assert (child_rows,) == child_y.shape == child_indices.shape
-
-  if is_left:
-    in_child = (~parent_is_removed) & (parent_X[:, split_c] <= split_bin)
-  else:
-    in_child = (~parent_is_removed) & (parent_X[:, split_c] > split_bin)
-  assert np.count_nonzero(in_child) == child_rows
-
-  # partition child rows
-  child_X[:] = parent_X[in_child, :]
-  child_y[:] = parent_y[in_child]
-  child_indices[:] = parent_indices[in_child]
-
-  # we're going to reuse parent for the other node
-  # with the child rows removed
-  parent_is_removed[in_child] = True
 
 
 def fit_tree(
@@ -182,7 +147,7 @@ def fit_tree(
     parent = nodes[split_n]
     if left_count < right_count:
       # initialize an empty node of the correct size;
-      # partition_and_count will fill it in
+      # copy_smaller will fill it in
       left = nodes[left_n] = Node(
         X = np.zeros((left_count, cols), dtype=X.dtype),
         y = np.zeros(left_count, dtype=y.dtype),
@@ -191,7 +156,7 @@ def fit_tree(
       )
 
       # fill in the new node & mark removed in old node
-      partition(
+      c_copy_smaller(
         split_c,
         split_bin,
         parent.X,
@@ -201,7 +166,7 @@ def fit_tree(
         left.X,
         left.y,
         left.indices,
-        is_left = True
+        True
       )
       # the right node is now the parent, with left rows marked as removed
       nodes[right_n] = nodes[split_n]
@@ -218,7 +183,7 @@ def fit_tree(
 
     else:
       # initialize an empty node of the correct size;
-      # partition_and_count will fill it in
+      # copy_smaller will fill it in
       right = nodes[right_n] = Node(
         X = np.zeros((right_count, cols), dtype=X.dtype),
         y = np.zeros(right_count, dtype=y.dtype),
@@ -227,7 +192,7 @@ def fit_tree(
       )
 
       # fill in the new node, mark removed in old node, count left histogram
-      partition(
+      c_copy_smaller(
         split_c,
         split_bin,
         parent.X,
@@ -237,7 +202,7 @@ def fit_tree(
         right.X,
         right.y,
         right.indices,
-        is_left = False
+        False
       )
       # the left node is now the parent, with right rows marked as removed
       nodes[left_n] = nodes[split_n]

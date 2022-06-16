@@ -159,6 +159,42 @@ def update_node_splits(
       split_bins[n] = split_bin
 
 
+def copy_smaller(
+  split_c: int,
+  split_bin: int,
+  parent_X: np.ndarray,
+  parent_y: np.ndarray,
+  parent_indices: np.ndarray,
+  parent_is_removed: np.ndarray,
+  child_X: np.ndarray,
+  child_y: np.ndarray,
+  child_indices: np.ndarray,
+  is_left: bool
+) -> None:
+  parent_rows, cols = parent_X.shape
+  child_rows, child_cols = child_X.shape
+  assert child_rows < parent_rows
+  assert child_cols == cols
+  assert (parent_rows,) == parent_y.shape == parent_indices.shape == parent_is_removed.shape
+  assert (child_rows,) == child_y.shape == child_indices.shape
+
+  if is_left:
+    in_child = (~parent_is_removed) & (parent_X[:, split_c] <= split_bin)
+  else:
+    in_child = (~parent_is_removed) & (parent_X[:, split_c] > split_bin)
+  assert np.count_nonzero(in_child) == child_rows
+
+  # partition child rows
+  child_X[:] = parent_X[in_child, :]
+  child_y[:] = parent_y[in_child]
+  child_indices[:] = parent_indices[in_child]
+
+  # we're going to reuse parent for the other node
+  # with the child rows removed
+  parent_is_removed[in_child] = True
+
+
+
 def like_c_eval_tree(
   X: np.ndarray,
   split_cols: np.ndarray,
