@@ -174,6 +174,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
     const uint64_t col = col_arg;
     const uint8_t val = val_arg;
     const uint64_t rows_in_parent = (uint64_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
+    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
     // cast data sections of numpy arrays to plain C pointers
@@ -214,33 +215,67 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
 
         uint64_t copy_start;
 
-        #pragma omp for nowait
-        for (uint64_t p = 0; p < rows_in_parent; p++) {
-            uint64_t r = parent_members[p];
-
-            if (X[r * cols + col] <= val) {
-                left_buf[local_left_i++] = r;
-            } else {
-                right_buf[local_right_i++] = r;
-            }
-
-            if (local_left_i == SPLIT_BUF_SIZE) {
-                #pragma omp critical
-                {
-                    copy_start = left_i;
-                    left_i = copy_start + SPLIT_BUF_SIZE;
+        if (rows == rows_in_parent) {
+            // special case when splitting the root
+            // we don't need to lookup parent members
+            #pragma omp for nowait
+            for (uint64_t r = 0; r < rows; r++) {
+                if (X[r * cols + col] <= val) {
+                    left_buf[local_left_i++] = r;
+                    if (local_left_i == SPLIT_BUF_SIZE) {
+                        #pragma omp critical
+                        {
+                            copy_start = left_i;
+                            left_i = copy_start + SPLIT_BUF_SIZE;
+                        }
+                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        local_left_i = 0;
+                    }
+                } else {
+                    right_buf[local_right_i++] = r;
+                    if (local_right_i == SPLIT_BUF_SIZE) {
+                        #pragma omp critical
+                        {
+                            copy_start = right_i;
+                            right_i = copy_start + SPLIT_BUF_SIZE;
+                        }
+                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        local_right_i = 0;
+                    }
                 }
-                memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
-                local_left_i = 0;
             }
-            if (local_right_i == SPLIT_BUF_SIZE) {
-                #pragma omp critical
-                {
-                    copy_start = right_i;
-                    right_i = copy_start + SPLIT_BUF_SIZE;
+        } else {
+            // general case
+
+            #pragma omp for nowait
+            for (uint64_t p = 0; p < rows_in_parent; p++) {
+                uint64_t r = parent_members[p];
+
+                if (X[r * cols + col] <= val) {
+                    left_buf[local_left_i++] = r;
+
+                    if (local_left_i == SPLIT_BUF_SIZE) {
+                        #pragma omp critical
+                        {
+                            copy_start = left_i;
+                            left_i = copy_start + SPLIT_BUF_SIZE;
+                        }
+                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        local_left_i = 0;
+                    }
+                } else {
+                    right_buf[local_right_i++] = r;
+
+                    if (local_right_i == SPLIT_BUF_SIZE) {
+                        #pragma omp critical
+                        {
+                            copy_start = right_i;
+                            right_i = copy_start + SPLIT_BUF_SIZE;
+                        }
+                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        local_right_i = 0;
+                    }
                 }
-                memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
-                local_right_i = 0;
             }
         }
         // copy anything leftover in the buffers
