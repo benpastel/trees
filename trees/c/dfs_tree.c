@@ -300,13 +300,13 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
     double   * __restrict child_y = PyArray_DATA((PyArrayObject *) child_y_obj);
     uint64_t * __restrict child_indices = PyArray_DATA((PyArrayObject *) child_indices_obj);
 
+
     uint64_t child_r = 0;
     if (parent_rows < MIN_PARALLEL_SPLIT) {
         if (is_left) {
             for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
                 if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val) {
                     // copy to child
-                    // TODO also update histograms here
                     for (uint64_t c = 0; c < cols; c++) {
                         child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
                     }
@@ -321,7 +321,6 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
             for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
                 if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val) {
                     // copy to child
-                    // TODO also update histograms here
                     for (uint64_t c = 0; c < cols; c++) {
                         child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
                     }
@@ -341,68 +340,60 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
     //
     // aggregate output buffers within each thread
     // once full, copy them
+
+    // update parent_is_removed later we don't poison the cache between threads
+    // TODO maybe first pass just count & write is_child?
+    // TODO check failure
+
+    bool * __restrict is_child = calloc(parent_rows, sizeof(bool));
+
     #pragma omp parallel
     {
-        uint8_t buf_X [SPLIT_BUF_SIZE * cols];
-        double buf_y [SPLIT_BUF_SIZE];
-        uint64_t buf_indices [SPLIT_BUF_SIZE];
-
-        uint64_t local_child_r = 0;
-
-        uint64_t copy_start;
+        // count the number of children in this thread's slice
+        uint64_t local_children = 0;
 
         #pragma omp for nowait
         for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
-
             if (is_left) {
-                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val) {
-                    // copy into buffer
-                    for (uint64_t c = 0; c < cols; c++) {
-                        buf_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
-                    }
-                    buf_y[local_child_r] = parent_y[parent_r];
-                    buf_indices[local_child_r] = parent_indices[parent_r];
-                    parent_is_removed[parent_r] = true;
-                    local_child_r++;
-                }
+                bool ok = (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val);
+                is_child[parent_r] = ok;
+                local_children += ok;
             } else {
-                // same as above but val comparison flipped
-                if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val) {
-                    for (uint64_t c = 0; c < cols; c++) {
-                        buf_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
-                    }
-                    buf_y[local_child_r] = parent_y[parent_r];
-                    buf_indices[local_child_r] = parent_indices[parent_r];
-                    parent_is_removed[parent_r] = true;
-                    local_child_r++;
-                }
-            }
-
-            if (local_child_r == SPLIT_BUF_SIZE) {
-                #pragma omp critical
-                {
-                    copy_start = child_r;
-                    child_r = copy_start + SPLIT_BUF_SIZE;
-                }
-                memcpy(child_X + (copy_start * cols), buf_X, SPLIT_BUF_SIZE * cols * sizeof(uint8_t));
-                memcpy(child_y + copy_start, buf_y, SPLIT_BUF_SIZE * sizeof(double));
-                memcpy(child_indices + copy_start, buf_indices, SPLIT_BUF_SIZE * sizeof(uint64_t));
-                local_child_r = 0;
+                bool ok = (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val);
+                is_child[parent_r] = ok;
+                local_children += ok;
             }
         }
-        // copy anything leftover in the buffers
-        if (local_child_r > 0) {
-            #pragma omp critical
-            {
-                copy_start = child_r;
-                child_r = copy_start + local_child_r;
+
+        // reserve space in the shared array for this thread's children
+        uint64_t local_child_r;
+        #pragma omp critical
+        {
+            local_child_r = child_r;
+            child_r += local_children;
+        }
+
+        #pragma omp for
+        for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
+            if (is_child[parent_r]) {
+                // copy to shared array
+                for (uint64_t c = 0; c < cols; c++) {
+                    child_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
+                }
+                child_y[local_child_r] = parent_y[parent_r];
+                child_indices[local_child_r] = parent_indices[parent_r];
+                // parent_is_removed[parent_r] = true; //  TODO try later
+                local_child_r++;
             }
-            memcpy(child_X + (copy_start * cols), buf_X, local_child_r * cols * sizeof(uint8_t));
-            memcpy(child_y + copy_start, buf_y, local_child_r * sizeof(double));
-            memcpy(child_indices + copy_start, buf_indices, local_child_r * sizeof(uint64_t));
         }
     }
+    #pragma omp parallel for
+    for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
+        parent_is_removed[parent_r] |= is_child[parent_r];
+    }
+
     assert(child_r == child_rows);
+    free(is_child);
     Py_RETURN_NONE;
 }
 
