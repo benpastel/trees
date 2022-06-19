@@ -15,21 +15,21 @@ def test_c_update_nodes():
   vals = 256
 
   hist_counts = np.random.randint(10, size=(max_nodes, cols, vals), dtype=np.uint32)
-  hist_sums = np.random.random(size=(max_nodes, cols, vals)).astype(np.float64)
-  hist_sum_sqs = np.random.random(size=(max_nodes, cols, vals)).astype(np.float64)
+  hist_sums = np.random.random(size=(max_nodes, cols, vals)).astype(np.float32)
+  hist_sum_sqs = np.random.random(size=(max_nodes, cols, vals)).astype(np.float32)
 
-  py_node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  py_node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
   py_split_cols = np.zeros(max_nodes, dtype=np.uint32)
   py_split_bins = np.zeros(max_nodes, dtype=np.uint8)
 
-  c_node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  c_node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
   c_split_cols = np.zeros(max_nodes, dtype=np.uint32)
   c_split_bins = np.zeros(max_nodes, dtype=np.uint8)
 
   py_update_node_splits(hist_counts, hist_sums, hist_sum_sqs, py_node_gains, py_split_cols, py_split_bins, 0)
   c_update_node_splits(hist_counts, hist_sums, hist_sum_sqs, c_node_gains, c_split_cols, c_split_bins, 0)
 
-  assert_array_almost_equal(py_node_gains, c_node_gains)
+  assert_array_almost_equal(py_node_gains, c_node_gains, decimal=3)
   assert_array_equal(py_split_cols, c_split_cols)
   assert_array_equal(py_split_bins, c_split_bins)
 
@@ -49,7 +49,7 @@ def test_fit_tree_simple():
     [2, 1],
     [3, 3],
   ], dtype=np.uint8)
-  y = np.array([2, 1, 2, 1], dtype=np.double)
+  y = np.array([2, 1, 2, 1], dtype=np.float32)
 
   # the bins in the 2nd column are
   bins = np.array([
@@ -83,7 +83,7 @@ def test_fit_tree_order():
   #    n=3      n=4       n=2
   #
   X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
-  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.double)
+  y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.float32)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
   tree, preds = fit_tree(
     X,
@@ -113,7 +113,7 @@ def test_eval_tree():
     split_cols = np.array([1,   0,  0, 0, 0], dtype=np.uint32),
     split_vals = np.array([100, 0, 10, 0, 0], dtype=np.float32),
     left_children  = np.array([1, 0, 3, 0, 0], dtype=np.uint16),
-    node_means     = np.array([0, 1, 0, 3, 2], dtype=np.double),
+    node_means     = np.array([0, 1, 0, 3, 2], dtype=np.float32),
   )
 
   X = np.array([

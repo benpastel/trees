@@ -37,7 +37,7 @@ def fit_tree(
 ) -> Tuple[Tree, np.ndarray]:
   rows, cols = X.shape
   assert X.dtype == np.uint8
-  assert y.dtype == np.double
+  assert y.dtype == np.float32
   assert y.shape == (rows,)
   assert bins.shape == (cols, params.bucket_count-1)
   assert bins.dtype == np.float32
@@ -59,7 +59,7 @@ def fit_tree(
   #   - count of rows in the node
   #   - best gain from splitting at this node
   node_counts = np.zeros(max_nodes, dtype=np.uint32)
-  node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
 
   # histograms
   # node, col, val => stat where X[c] == val in this node
@@ -67,8 +67,8 @@ def fit_tree(
   #   - sum of y
   #   - sum of y^2
   hist_counts = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.uint32)
-  hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
-  hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
+  hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float32)
+  hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float32)
 
   # root count
   node_counts[0] = rows
@@ -177,7 +177,7 @@ def fit_tree(
 
   # any node remaining in membership is a leaf
   # prediction for each row is the mean of the node the row is in
-  node_means = np.zeros(node_count)
+  node_means = np.zeros(node_count, dtype=np.float32)
   preds = np.zeros(rows, dtype=np.float32)
   for n, leaf_members in memberships.items():
     node_means[n] = np.mean(y[leaf_members])
@@ -208,11 +208,10 @@ def fit_tree(
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
-  # this will be the python wrapper for the c function
   assert X.dtype == np.float32
   rows, feats = X.shape
 
-  values = np.zeros(rows, dtype=np.double)
+  values = np.zeros(rows, dtype=np.float32)
   c_eval_tree(
     X,
     tree.split_cols,
