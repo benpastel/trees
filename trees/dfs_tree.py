@@ -136,32 +136,27 @@ def fit_tree(
     # update histograms
     # TODO parameterize smaller / larger
     if node_counts[left_n] < node_counts[right_n]:
-      # calculate left
-      hist_counts[left_n] = np.zeros((cols, params.bucket_count), dtype=np.uint32)
-      hist_sums[left_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
-      hist_sum_sqs[left_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
-      c_update_histograms(memberships[left_n], X, y, hist_counts[left_n], hist_sums[left_n], hist_sum_sqs[left_n])
-
-      # find right via subtraction
-      hist_counts[right_n] = hist_counts[split_n] - hist_counts[left_n]
-      hist_sums[right_n] = hist_sums[split_n] - hist_sums[left_n]
-      hist_sum_sqs[right_n] = hist_sum_sqs[split_n] - hist_sum_sqs[left_n]
+      small_n = left_n
+      large_n = right_n
     else:
-      # calculate right
-      hist_counts[right_n] = np.zeros((cols, params.bucket_count), dtype=np.uint32)
-      hist_sums[right_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
-      hist_sum_sqs[right_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
-      c_update_histograms(memberships[right_n], X, y, hist_counts[right_n], hist_sums[right_n], hist_sum_sqs[right_n])
+      small_n = right_n
+      large_n = left_n
 
-      # find left via subtraction
-      hist_counts[left_n] = hist_counts[split_n] - hist_counts[right_n]
-      hist_sums[left_n] = hist_sums[split_n] - hist_sums[right_n]
-      hist_sum_sqs[left_n] = hist_sum_sqs[split_n] - hist_sum_sqs[right_n]
+    # calculate smaller
+    hist_counts[small_n] = np.zeros((cols, params.bucket_count), dtype=np.uint32)
+    hist_sums[small_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
+    hist_sum_sqs[small_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
+    c_update_histograms(memberships[small_n], X, y, hist_counts[small_n], hist_sums[small_n], hist_sum_sqs[small_n])
 
-    # TODO re-use this as one of the child histograms instead?
-    del hist_counts[split_n]
-    del hist_sums[split_n]
-    del hist_sum_sqs[split_n]
+    # find larger via subtraction
+    # reuse the parent node histogram arrays (split_n) since we're done with them
+    hist_counts[split_n] -= hist_counts[small_n]
+    hist_sums[split_n] -= hist_sums[small_n]
+    hist_sum_sqs[split_n] -= hist_sum_sqs[small_n]
+
+    hist_counts[large_n] = hist_counts.pop(split_n)
+    hist_sums[large_n] = hist_sums.pop(split_n)
+    hist_sum_sqs[large_n] = hist_sum_sqs.pop(split_n)
 
     # find the best splits for each new node
     c_update_node_splits(

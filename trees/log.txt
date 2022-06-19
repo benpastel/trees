@@ -1,4 +1,7 @@
+# TODO: slightly stale
+
 TREE_COUNT=10 python -m trees.benchmarks (battery)
+
 
 
 TREE_COUNT=10
