@@ -47,18 +47,18 @@ def fit_tree(
   max_nodes = params.dfs_max_nodes
   assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
 
-  split_cols = np.zeros(max_nodes, dtype=np.uint64)
+  split_cols = np.zeros(max_nodes, dtype=np.uint32)
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
 
   # node => array of rows belonging to it
   # initially all rows belong to root (0)
-  memberships = {0: np.arange(rows, dtype=np.uint64)}
+  memberships = {0: np.arange(rows, dtype=np.uint32)}
 
   # node stats:
   #   - count of rows in the node
   #   - best gain from splitting at this node
-  node_counts = np.zeros(max_nodes, dtype=np.uint64)
+  node_counts = np.zeros(max_nodes, dtype=np.uint32)
   node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
 
   # histograms
@@ -66,7 +66,6 @@ def fit_tree(
   #   - count of rows
   #   - sum of y
   #   - sum of y^2
-  # TODO why did I make the counts uint32? should be uint64 right?
   hist_counts = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.uint32)
   hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
   hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
@@ -123,8 +122,8 @@ def fit_tree(
     node_counts[right_child] = node_counts[split_n] - node_counts[left_child]
 
     # allocate new membership arrays
-    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint64)
-    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint64)
+    memberships[left_child] = np.zeros(node_counts[left_child], dtype=np.uint32)
+    memberships[right_child] = np.zeros(node_counts[right_child], dtype=np.uint32)
     c_update_memberships(
       X,
       memberships[split_n],

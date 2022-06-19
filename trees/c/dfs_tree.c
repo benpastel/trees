@@ -46,7 +46,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
         &PyArray_Type, &hist_sum_sqs_arg,
         &node_arg)) return NULL;
 
-    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
     PyObject *y_obj = PyArray_FROM_OTF(y_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
@@ -55,15 +55,15 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
 
     const int node = node_arg;
-    const uint64_t rows_in_node = (uint64_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
+    const uint32_t rows_in_node = (uint32_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
+    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
     double *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
-    uint64_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
+    uint32_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
 
     // the histograms are indexed [node, column, bucket]
     uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
@@ -77,12 +77,12 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 
     if (rows_in_node < MIN_PARALLEL_SPLIT) {
         // build the histogram single-threaded
-        for (uint64_t i = 0; i < rows_in_node; i++) {
-            uint64_t r = memberships[i];
+        for (uint32_t i = 0; i < rows_in_node; i++) {
+            uint32_t r = memberships[i];
 
             for (uint32_t c = 0; c < cols; c++) {
                 uint8_t v = X[r*cols + c];
-                uint64_t idx = c*vals + v;
+                uint32_t idx = c*vals + v;
                 counts[idx]++;
                 sums[idx] += y[r];
                 sum_sqs[idx] += y[r]*y[r];
@@ -101,10 +101,10 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
                 // as a slight optimization, we can skip the memberships lookup
                 // because all rows belong to the root
                 #pragma omp for nowait
-                for (uint64_t r = 0; r < rows_in_node; r++) {
-                    for (uint64_t c = 0; c < cols; c++) {
+                for (uint32_t r = 0; r < rows_in_node; r++) {
+                    for (uint32_t c = 0; c < cols; c++) {
                         uint8_t v = X[r*cols + c];
-                        uint64_t idx = c*vals + v;
+                        uint32_t idx = c*vals + v;
                         local_counts[idx]++;
                         local_sums[idx] += y[r];
                         local_sum_sqs[idx] += y[r]*y[r];
@@ -113,12 +113,12 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             } else {
                 // the general case: we need to look up which rows belong to the node
                 #pragma omp for nowait
-                for (uint64_t i = 0; i < rows_in_node; i++) {
-                    uint64_t r = memberships[i];
+                for (uint32_t i = 0; i < rows_in_node; i++) {
+                    uint32_t r = memberships[i];
 
-                    for (uint64_t c = 0; c < cols; c++) {
+                    for (uint32_t c = 0; c < cols; c++) {
                         uint8_t v = X[r*cols + c];
-                        uint64_t idx = c*vals + v;
+                        uint32_t idx = c*vals + v;
                         local_counts[idx]++;
                         local_sums[idx] += y[r];
                         local_sum_sqs[idx] += y[r]*y[r];
@@ -132,9 +132,9 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             //  ... or fix a multiple?  32 x [1-8]?
             #pragma omp critical
             {
-                for (uint64_t c = 0; c < cols; c++) {
+                for (uint32_t c = 0; c < cols; c++) {
                     for (uint v = 0; v < vals; v++) {
-                        uint64_t i = c*vals + v;
+                        uint32_t i = c*vals + v;
                         counts[i] += local_counts[i];
                         sums[i] += local_sums[i];
                         sum_sqs[i] += local_sum_sqs[i];
@@ -167,28 +167,28 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
     )) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
-    PyObject *parent_members_obj = PyArray_FROM_OTF(parent_members_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
-    PyObject *left_members_obj = PyArray_FROM_OTF(left_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
-    PyObject *right_members_obj = PyArray_FROM_OTF(right_members_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *parent_members_obj = PyArray_FROM_OTF(parent_members_arg, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
+    PyObject *left_members_obj = PyArray_FROM_OTF(left_members_arg, NPY_UINT32, NPY_ARRAY_OUT_ARRAY);
+    PyObject *right_members_obj = PyArray_FROM_OTF(right_members_arg, NPY_UINT32, NPY_ARRAY_OUT_ARRAY);
 
-    const uint64_t col = col_arg;
+    const uint32_t col = col_arg;
     const uint8_t val = val_arg;
-    const uint64_t rows_in_parent = (uint64_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint32_t rows_in_parent = (uint32_t) PyArray_DIM((PyArrayObject *) parent_members_obj, 0);
+    const uint32_t rows = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     uint8_t *  __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * __restrict parent_members = PyArray_DATA((PyArrayObject *) parent_members_obj);
-    uint64_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
-    uint64_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
+    uint32_t * __restrict parent_members = PyArray_DATA((PyArrayObject *) parent_members_obj);
+    uint32_t * __restrict left_members = PyArray_DATA((PyArrayObject *) left_members_obj);
+    uint32_t * __restrict right_members = PyArray_DATA((PyArrayObject *) right_members_obj);
 
-    uint64_t left_i = 0;
-    uint64_t right_i = 0;
+    uint32_t left_i = 0;
+    uint32_t right_i = 0;
     if (rows_in_parent < MIN_PARALLEL_SPLIT) {
-        for (uint64_t p = 0; p < rows_in_parent; p++) {
-            uint64_t r = parent_members[p];
+        for (uint32_t p = 0; p < rows_in_parent; p++) {
+            uint32_t r = parent_members[p];
             if (X[r * cols + col] <= val) {
                 // assign to left child
                 left_members[left_i++] = r;
@@ -207,19 +207,19 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
     // once full, copy it into memberships
     #pragma omp parallel
     {
-        uint64_t left_buf [SPLIT_BUF_SIZE];
-        uint64_t right_buf [SPLIT_BUF_SIZE];
+        uint32_t left_buf [SPLIT_BUF_SIZE];
+        uint32_t right_buf [SPLIT_BUF_SIZE];
 
-        uint64_t local_left_i = 0;
-        uint64_t local_right_i = 0;
+        uint32_t local_left_i = 0;
+        uint32_t local_right_i = 0;
 
-        uint64_t copy_start;
+        uint32_t copy_start;
 
         if (rows == rows_in_parent) {
             // special case when splitting the root
             // we don't need to lookup parent members
             #pragma omp for nowait
-            for (uint64_t r = 0; r < rows; r++) {
+            for (uint32_t r = 0; r < rows; r++) {
                 if (X[r * cols + col] <= val) {
                     left_buf[local_left_i++] = r;
                     if (local_left_i == SPLIT_BUF_SIZE) {
@@ -228,7 +228,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                             copy_start = left_i;
                             left_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
                         local_left_i = 0;
                     }
                 } else {
@@ -239,7 +239,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                             copy_start = right_i;
                             right_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
                         local_right_i = 0;
                     }
                 }
@@ -248,8 +248,8 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
             // general case
 
             #pragma omp for nowait
-            for (uint64_t p = 0; p < rows_in_parent; p++) {
-                uint64_t r = parent_members[p];
+            for (uint32_t p = 0; p < rows_in_parent; p++) {
+                uint32_t r = parent_members[p];
 
                 if (X[r * cols + col] <= val) {
                     left_buf[local_left_i++] = r;
@@ -260,7 +260,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                             copy_start = left_i;
                             left_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        memcpy(left_members + copy_start, left_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
                         local_left_i = 0;
                     }
                 } else {
@@ -272,7 +272,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                             copy_start = right_i;
                             right_i = copy_start + SPLIT_BUF_SIZE;
                         }
-                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint64_t));
+                        memcpy(right_members + copy_start, right_buf, SPLIT_BUF_SIZE * sizeof(uint32_t));
                         local_right_i = 0;
                     }
                 }
@@ -285,7 +285,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                 copy_start = left_i;
                 left_i = copy_start + local_left_i;
             }
-            memcpy(left_members + copy_start, left_buf, local_left_i * sizeof(uint64_t));
+            memcpy(left_members + copy_start, left_buf, local_left_i * sizeof(uint32_t));
         }
         if (local_right_i > 0) {
             #pragma omp critical
@@ -293,7 +293,7 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                 copy_start = right_i;
                 right_i = copy_start + local_right_i;
             }
-            memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint64_t));
+            memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint32_t));
         }
     }
     Py_RETURN_NONE;
@@ -361,13 +361,13 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
 
     PyObject *node_gains_obj = PyArray_FROM_OTF(node_gains_arg, NPY_DOUBLE, NPY_ARRAY_OUT_ARRAY);
-    PyObject *split_cols_obj = PyArray_FROM_OTF(split_cols_arg, NPY_UINT64, NPY_ARRAY_OUT_ARRAY);
+    PyObject *split_cols_obj = PyArray_FROM_OTF(split_cols_arg, NPY_UINT32, NPY_ARRAY_OUT_ARRAY);
     PyObject *split_bins_obj = PyArray_FROM_OTF(split_bins_arg, NPY_UINT8, NPY_ARRAY_OUT_ARRAY);
 
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     double   * __restrict node_gains = PyArray_DATA((PyArrayObject *) node_gains_obj);
-    uint64_t * __restrict split_cols = PyArray_DATA((PyArrayObject *) split_cols_obj);
+    uint32_t * __restrict split_cols = PyArray_DATA((PyArrayObject *) split_cols_obj);
     uint8_t  * __restrict split_bins = PyArray_DATA((PyArrayObject *) split_bins_obj);
 
     // the histograms are indexed [node, column, bucket]
@@ -376,23 +376,23 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     double * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
 
     const int node = node_arg;
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
-    const uint64_t vals = (uint64_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
+    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
+    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
 
     // higher gain is better; above 0 means the split improved MSE
     double best_gain = 0;
-    uint64_t best_col = 0;
+    uint32_t best_col = 0;
     uint8_t best_v = 0;
 
     // parallelizing this for loop doesn't seem to gain anything, so single-threaded for now
-    for (uint64_t c = 0; c < cols; c++) {
+    for (uint32_t c = 0; c < cols; c++) {
 
         // find the histogram totals for this column
         uint32_t total_count = 0;
         double total_sum = 0;
         double total_sum_sqs = 0;
-        for (uint64_t v = 0; v < vals; v++) {
-            uint64_t idx = node * cols * vals + c * vals + v;
+        for (uint32_t v = 0; v < vals; v++) {
+            uint32_t idx = node * cols * vals + c * vals + v;
             total_count += counts[idx];
             total_sum += sums[idx];
             total_sum_sqs += sum_sqs[idx];
@@ -405,8 +405,8 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
 
         // v is a proposed split value; x <= v will go left
         // max value is vals - 2 so that x = (vals - 1) will go right
-        for (uint64_t v = 0; v < vals - 1; v++) {
-            uint64_t idx = node * cols * vals + c * vals + v;
+        for (uint32_t v = 0; v < vals - 1; v++) {
+            uint32_t idx = node * cols * vals + c * vals + v;
             left_count += counts[idx];
             left_sum += sums[idx];
             left_sum_sqs += sum_sqs[idx];
@@ -455,7 +455,7 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
         &PyArray_Type, &out_arg)) return NULL;
 
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
-    PyObject *split_cols_obj = PyArray_FROM_OTF(split_cols_arg, NPY_UINT64, NPY_ARRAY_IN_ARRAY);
+    PyObject *split_cols_obj = PyArray_FROM_OTF(split_cols_arg, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
     PyObject *split_vals_obj = PyArray_FROM_OTF(split_vals_arg, NPY_FLOAT32, NPY_ARRAY_IN_ARRAY);
     PyObject *left_children_obj = PyArray_FROM_OTF(left_children_arg, NPY_UINT16, NPY_ARRAY_IN_ARRAY);
     PyObject *node_mean_obj = PyArray_FROM_OTF(node_mean_arg, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
@@ -479,17 +479,17 @@ static PyObject* eval_tree(PyObject *dummy, PyObject *args)
     // cast data sections of numpy arrays to plain C pointers
     // this assumes the arrays are C-order, aligned, non-strided
     float *    __restrict X            = PyArray_DATA((PyArrayObject *) X_obj);
-    uint64_t * __restrict split_cols    = PyArray_DATA((PyArrayObject *) split_cols_obj);
+    uint32_t * __restrict split_cols    = PyArray_DATA((PyArrayObject *) split_cols_obj);
     float *    __restrict split_vals    = PyArray_DATA((PyArrayObject *) split_vals_obj);
     uint16_t * __restrict left_children  = PyArray_DATA((PyArrayObject *) left_children_obj);
     double *   __restrict node_means   = PyArray_DATA((PyArrayObject *) node_mean_obj);
     double *   __restrict out          = PyArray_DATA((PyArrayObject *) out_obj);
 
-    const uint64_t rows = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
-    const uint64_t cols = (uint64_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint32_t rows = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
+    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
 
     #pragma omp parallel for
-    for (uint64_t r = 0; r < rows; r++) {
+    for (uint32_t r = 0; r < rows; r++) {
         uint16_t n = 0;
         uint16_t left;
         while ((left = left_children[n])) {
