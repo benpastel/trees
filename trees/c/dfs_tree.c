@@ -127,9 +127,6 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             }
 
             // add the histograms together
-            // TODO try atomic
-            //  and/or fix the values so we can vectorize
-            //  ... or fix a multiple?  32 x [1-8]?
             #pragma omp critical
             {
                 for (uint32_t c = 0; c < cols; c++) {
@@ -146,6 +143,12 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             free(local_sum_sqs);
         }
     }
+    Py_DECREF(memberships_obj);
+    Py_DECREF(X_obj);
+    Py_DECREF(y_obj);
+    Py_DECREF(hist_counts_obj);
+    Py_DECREF(hist_sums_obj);
+    Py_DECREF(hist_sum_sqs_obj);
     Py_RETURN_NONE;
 }
 
@@ -197,6 +200,10 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
                 right_members[right_i++] = r;
             }
         }
+        Py_DECREF(X_obj);
+        Py_DECREF(parent_members_obj);
+        Py_DECREF(left_members_obj);
+        Py_DECREF(right_members_obj );
         Py_RETURN_NONE;
     }
     // otherwise, multi-threaded
@@ -296,6 +303,10 @@ static PyObject* update_memberships(PyObject *dummy, PyObject *args)
             memcpy(right_members + copy_start, right_buf, local_right_i * sizeof(uint32_t));
         }
     }
+    Py_DECREF(X_obj);
+    Py_DECREF(parent_members_obj);
+    Py_DECREF(left_members_obj);
+    Py_DECREF(right_members_obj );
     Py_RETURN_NONE;
 }
 
@@ -434,6 +445,12 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     split_cols[node] = best_col;
     split_bins[node] = best_v;
 
+    Py_DECREF(hist_counts_arg);
+    Py_DECREF(hist_sums_arg);
+    Py_DECREF(hist_sum_sqs_arg);
+    Py_DECREF(node_gains_arg);
+    Py_DECREF(split_cols_arg);
+    Py_DECREF(split_bins_arg);
     Py_RETURN_NONE;
 }
 
