@@ -14,9 +14,9 @@ def test_c_update_nodes():
   cols = 2
   vals = 256
 
-  hist_counts = np.random.randint(10, size=(max_nodes, cols, vals), dtype=np.uint32)
-  hist_sums = np.random.random(size=(max_nodes, cols, vals)).astype(np.float32)
-  hist_sum_sqs = np.random.random(size=(max_nodes, cols, vals)).astype(np.float32)
+  hist_counts = np.random.randint(10, size=(cols, vals), dtype=np.uint32)
+  hist_sums = np.random.random(size=(cols, vals)).astype(np.float32)
+  hist_sum_sqs = np.random.random(size=(cols, vals)).astype(np.float32)
 
   py_node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
   py_split_cols = np.zeros(max_nodes, dtype=np.uint32)

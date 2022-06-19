@@ -27,24 +27,20 @@ static PyMethodDef Methods[] = {
 #define MIN_PARALLEL_SPLIT 1024
 #define SPLIT_BUF_SIZE 1024
 
-// TODO: py deref objects everywhere
-
 static PyObject* update_histograms(PyObject *dummy, PyObject *args)
 {
     PyObject *memberships_arg;
     PyObject *X_arg, *y_arg;
     PyObject *hist_counts_arg, *hist_sums_arg, *hist_sum_sqs_arg;
-    int node_arg;
 
     // parse input arguments
-    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!i",
+    if (!PyArg_ParseTuple(args, "O!O!O!O!O!O!",
         &PyArray_Type, &memberships_arg,
         &PyArray_Type, &X_arg,
         &PyArray_Type, &y_arg,
         &PyArray_Type, &hist_counts_arg,
         &PyArray_Type, &hist_sums_arg,
-        &PyArray_Type, &hist_sum_sqs_arg,
-        &node_arg)) return NULL;
+        &PyArray_Type, &hist_sum_sqs_arg)) return NULL;
 
     PyObject *memberships_obj = PyArray_FROM_OTF(memberships_arg, NPY_UINT32, NPY_ARRAY_IN_ARRAY);
     PyObject *X_obj = PyArray_FROM_OTF(X_arg, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
@@ -54,26 +50,17 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     PyObject *hist_sums_obj = PyArray_FROM_OTF(hist_sums_arg, NPY_FLOAT32, NPY_ARRAY_OUT_ARRAY);
     PyObject *hist_sum_sqs_obj = PyArray_FROM_OTF(hist_sum_sqs_arg, NPY_FLOAT32, NPY_ARRAY_OUT_ARRAY);
 
-    const int node = node_arg;
     const uint32_t rows_in_node = (uint32_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
+    const uint32_t rows = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
-    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
+    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
 
-    // cast data sections of numpy arrays to plain C pointers
-    // this assumes the arrays are C-order, aligned, non-strided
-    uint8_t *  __restrict X           = PyArray_DATA((PyArrayObject *) X_obj);
-    float *   __restrict y           = PyArray_DATA((PyArrayObject *) y_obj);
+    uint8_t  * __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
+    float    * __restrict y = PyArray_DATA((PyArrayObject *) y_obj);
     uint32_t * __restrict memberships = PyArray_DATA((PyArrayObject *) memberships_obj);
-
-    // the histograms are indexed [node, column, bucket]
     uint32_t * __restrict counts = PyArray_DATA((PyArrayObject *) hist_counts_obj);
-    float * __restrict sums = PyArray_DATA((PyArrayObject *) hist_sums_obj);
-    float * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
-
-    // => [column, bucket]
-    counts += node*cols*vals;
-    sums += node*cols*vals;
-    sum_sqs += node*cols*vals;
+    float    * __restrict sums = PyArray_DATA((PyArrayObject *) hist_sums_obj);
+    float    * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
 
     if (rows_in_node < MIN_PARALLEL_SPLIT) {
         // build the histogram single-threaded
@@ -96,7 +83,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             float * __restrict local_sums = calloc(cols*vals, sizeof(float));
             float * __restrict local_sum_sqs = calloc(cols*vals, sizeof(float));
 
-            if (node == 0) {
+            if (rows == rows_in_node) {
                 // the root node histogram accounts for a lot of the final runtime
                 // as a slight optimization, we can skip the memberships lookup
                 // because all rows belong to the root
@@ -387,8 +374,8 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     float * __restrict sum_sqs = PyArray_DATA((PyArrayObject *) hist_sum_sqs_obj);
 
     const int node = node_arg;
-    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
-    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 2);
+    const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 0);
+    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
 
     // higher gain is better; above 0 means the split improved MSE
     float best_gain = 0;
@@ -403,7 +390,7 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
         float total_sum = 0;
         float total_sum_sqs = 0;
         for (uint32_t v = 0; v < vals; v++) {
-            uint32_t idx = node * cols * vals + c * vals + v;
+            uint32_t idx = c * vals + v;
             total_count += counts[idx];
             total_sum += sums[idx];
             total_sum_sqs += sum_sqs[idx];
@@ -417,7 +404,7 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
         // v is a proposed split value; x <= v will go left
         // max value is vals - 2 so that x = (vals - 1) will go right
         for (uint32_t v = 0; v < vals - 1; v++) {
-            uint32_t idx = node * cols * vals + c * vals + v;
+            uint32_t idx = c * vals + v;
             left_count += counts[idx];
             left_sum += sums[idx];
             left_sum_sqs += sum_sqs[idx];

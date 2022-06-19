@@ -139,7 +139,8 @@ def update_node_splits(
   #   split_bins[n] to the value to split that column
   #   node_gains[n] to the gain from taking the split
   #
-  nodes, cols, vals = hist_counts.shape
+  cols, vals = hist_counts.shape
+  nodes = len(node_gains)
   assert hist_counts.shape == hist_sums.shape == hist_sum_sqs.shape
   assert node_gains.shape == split_cols.shape == split_bins.shape == (nodes,)
   assert 0 <= n < nodes
@@ -149,9 +150,9 @@ def update_node_splits(
     if _VERBOSE:
       print(f"c={c}")
     gain, split_bin = _best_col_split(
-      hist_counts[n,c],
-      hist_sums[n,c],
-      hist_sum_sqs[n,c],
+      hist_counts[c],
+      hist_sums[c],
+      hist_sum_sqs[c],
     )
     if gain > node_gains[n]:
       node_gains[n] = gain
