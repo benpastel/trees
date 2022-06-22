@@ -59,7 +59,7 @@ def fit_tree(
   # node stats:
   #   - count of rows in the node
   #   - best gain from splitting at this node
-  node_counts = np.zeros(max_nodes, dtype=np.uint32)
+  node_counts = np.empty(max_nodes, dtype=np.uint32)
   node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
 
   # histograms
@@ -127,8 +127,8 @@ def fit_tree(
     node_counts[right_n] = node_counts[split_n] - node_counts[left_n]
 
     # allocate new membership arrays
-    memberships[left_n] = np.zeros(node_counts[left_n], dtype=np.uint32)
-    memberships[right_n] = np.zeros(node_counts[right_n], dtype=np.uint32)
+    memberships[left_n] = np.empty(node_counts[left_n], dtype=np.uint32)
+    memberships[right_n] = np.empty(node_counts[right_n], dtype=np.uint32)
     c_update_memberships(
       X,
       memberships[split_n],
@@ -140,7 +140,6 @@ def fit_tree(
     del memberships[split_n]
 
     # update histograms
-    # TODO parameterize smaller / larger
     if node_counts[left_n] < node_counts[right_n]:
       small_n = left_n
       large_n = right_n
@@ -195,7 +194,7 @@ def fit_tree(
   # any node remaining in membership is a leaf
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count, dtype=np.float32)
-  preds = np.zeros(rows, dtype=np.float32)
+  preds = np.empty(rows, dtype=np.float32)
 
   for n, leaf_members in memberships.items():
     # mean y is sum/count in any histogram
@@ -204,7 +203,7 @@ def fit_tree(
     preds[leaf_members] = node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
-  split_vals = np.zeros(node_count, dtype=np.float32)
+  split_vals = np.empty(node_count, dtype=np.float32)
   for n in range(node_count):
     split_vals[n] = bins[split_cols[n], split_bins[n]]
 
