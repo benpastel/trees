@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple, Union
 import numpy as np
 from scipy.stats import chi2
 
-from trees.params import Params
+from trees.params import Params, DEBUG_STATS
 from trees.dfs_tree import Tree, fit_tree, eval_tree
 
 # TODO rename file
@@ -27,7 +27,6 @@ class Model:
       s += ':\n'
       s += '\n'.join(str(t) for t in self.trees)
     return s
-
 
 def choose_bins(
     X: np.ndarray,
@@ -78,8 +77,7 @@ def choose_bins(
 
   # check bins are nondecreasing within each feature
   # by comparing all elements (skip the last) to their right neighbor (skip the first)
-  assert np.all(bins[:,:-1] <= bins[:,1:])
-
+  # assert np.all(bins[:,:-1] <= bins[:,1:])
   return bins
 
 
@@ -103,9 +101,21 @@ def apply_bins(
   assert out_bin_X.shape == (rows, cols)
   assert out_bin_X.dtype == np.uint8
 
+  if DEBUG_STATS:
+    orig_bin_X = out_bin_X.copy()
+
   c_apply_bins(X, bins, out_bin_X)
 
-  assert np.all(out_bin_X < splits+1)
+  if DEBUG_STATS:
+    changes_by_column = np.sum(orig_bin_X != out_bin_X, axis=0)
+
+    print(f"""
+      Bucketed {rows=}, {cols=}
+        total columns with changes: {np.sum(changes_by_column > 0)}
+        {changes_by_column=}
+      """)
+
+  # assert np.all(out_bin_X < splits+1)
 
 
 

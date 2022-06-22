@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 @dataclass
@@ -21,5 +22,8 @@ class Params:
   # DFS tree parameters
   dfs_max_nodes: int = 64 # lightgbm defaults to 31 max leaves, let's try that?
 
-
-
+# turn on to collect & print model statistics
+# big performance penalty
+DEBUG_STATS = int(os.environ.get('DEBUG_STATS', '0')) > 0
+if DEBUG_STATS:
+  print("Collecting debug stats.")

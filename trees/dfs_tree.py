@@ -3,7 +3,7 @@ from typing import Optional, List, Tuple
 
 import numpy as np
 
-from trees.params import Params
+from trees.params import Params, DEBUG_STATS
 from trees.c.dfs_tree import (
   update_histograms as c_update_histograms,
   update_node_splits as c_update_node_splits,
@@ -42,10 +42,11 @@ def fit_tree(
   assert bins.shape == (cols, params.bucket_count-1)
   assert bins.dtype == np.float32
   assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
-  assert 0 < rows < 2**32-1, 'rows must fit in uint32'
-  assert 0 < cols < 2**32-1, 'cols must fit in uint32'
   max_nodes = params.dfs_max_nodes
   assert 0 < max_nodes < 2**16-1, 'nodes must fit in uint16'
+
+  # TODO promote X indices to uint64 to avoid this?
+  assert 0 < rows * cols< 2**32-1, 'rows * cols must fit in uint32'
 
   split_cols = np.zeros(max_nodes, dtype=np.uint32)
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
@@ -86,6 +87,11 @@ def fit_tree(
     split_bins,
     0,
   )
+
+  if DEBUG_STATS:
+    small_fractions = []
+    small_counts = []
+    large_counts = []
 
   # grow the tree
   node_count = 1
@@ -142,6 +148,11 @@ def fit_tree(
       small_n = right_n
       large_n = left_n
 
+    if DEBUG_STATS:
+      small_counts.append(node_counts[small_n])
+      large_counts.append(node_counts[large_n])
+      small_fractions.append(node_counts[small_n] / node_counts[large_n])
+
     # calculate smaller
     hist_counts[small_n] = np.zeros((cols, params.bucket_count), dtype=np.uint32)
     hist_sums[small_n] = np.zeros((cols, params.bucket_count), dtype=np.float32)
@@ -185,8 +196,11 @@ def fit_tree(
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count, dtype=np.float32)
   preds = np.zeros(rows, dtype=np.float32)
+
   for n, leaf_members in memberships.items():
-    node_means[n] = np.mean(y[leaf_members])
+    # mean y is sum/count in any histogram
+    # so use feature 0
+    node_means[n] = np.sum(hist_sums[n][0]) / np.sum(hist_counts[n][0])
     preds[leaf_members] = node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
@@ -203,6 +217,15 @@ def fit_tree(
   # tree looks like in the unit test
   is_leaf = (left_children == 0)
   split_vals[is_leaf] = 0
+
+  if DEBUG_STATS:
+    print(f"""
+      {np.bincount(split_cols)=}
+      {node_means=}
+      {small_fractions=}
+      {small_counts=}
+      {large_counts=}
+    """)
 
   return Tree(
     node_count,
