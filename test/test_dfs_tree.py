@@ -50,6 +50,7 @@ def test_fit_tree_simple():
     [3, 3],
   ], dtype=np.uint8)
   y = np.array([2, 1, 2, 1], dtype=np.float32)
+  preds = np.zeros(4, dtype=np.float32)
 
   # the bins in the 2nd column are
   bins = np.array([
@@ -57,11 +58,12 @@ def test_fit_tree_simple():
     [0, 10, 20, 30, 40]
   ], dtype=np.float32)
 
-  tree, preds = fit_tree(
+  tree = fit_tree(
     X,
     y,
     bins,
-    Params(bucket_count=6)
+    Params(bucket_count=6),
+    preds
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 3
@@ -85,11 +87,13 @@ def test_fit_tree_order():
   X = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.uint8).reshape((-1, 1))
   y = np.array([9, 2, 7, 0, 2, 100, 3, 100, 100], dtype=np.float32)
   bins = np.arange(255, dtype=np.float32).reshape((1, -1))
-  tree, preds = fit_tree(
+  preds = np.zeros(len(y), dtype=np.float32)
+  tree = fit_tree(
     X,
     y,
     bins,
-    Params(dfs_max_nodes=5, bucket_count=256)
+    Params(dfs_max_nodes=5, bucket_count=256),
+    preds
   )
   pp.pprint(tree.__dict__)
   assert tree.node_count == 5

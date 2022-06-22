@@ -151,10 +151,9 @@ def fit(
 
     target = params.learning_rate * (y - preds)
 
-    tree, new_preds = fit_tree(bin_X, target, bins, params) # type: ignore
+    # fit_tree also updates preds internally; this is more efficient than returning new preds
+    tree = fit_tree(bin_X, target, bins, params, preds) # type: ignore
     trees.append(tree)
-
-    preds += new_preds
 
   return Model(trees, targets_are_float, mean_y), preds
 

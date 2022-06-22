@@ -33,8 +33,9 @@ def fit_tree(
     X: np.ndarray,
     y: np.ndarray,
     bins: np.ndarray,
-    params: Params
-) -> Tuple[Tree, np.ndarray]:
+    params: Params,
+    preds: np.ndarray
+) -> Tree:
   rows, cols = X.shape
   assert X.dtype == np.uint8
   assert y.dtype == np.float32
@@ -194,13 +195,11 @@ def fit_tree(
   # any node remaining in membership is a leaf
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count, dtype=np.float32)
-  preds = np.empty(rows, dtype=np.float32)
-
   for n, leaf_members in memberships.items():
     # mean y is sum/count in any histogram
     # so use feature 0
     node_means[n] = np.sum(hist_sums[n][0]) / np.sum(hist_counts[n][0])
-    preds[leaf_members] = node_means[n]
+    preds[leaf_members] += node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
   split_vals = np.empty(node_count, dtype=np.float32)
@@ -232,7 +231,7 @@ def fit_tree(
     split_vals,
     left_children,
     node_means,
-  ), preds
+  )
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
