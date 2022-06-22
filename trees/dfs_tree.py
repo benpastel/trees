@@ -55,6 +55,7 @@ def fit_tree(
 
   # node => array of rows belonging to it
   # initially all rows belong to root (0)
+  # TODO since we special-case the root, maybe remove this?
   memberships = {0: np.arange(rows, dtype=np.uint32)}
 
   # node stats:
@@ -128,6 +129,8 @@ def fit_tree(
     node_counts[right_n] = node_counts[split_n] - node_counts[left_n]
 
     # allocate new membership arrays
+    # TODO: tombstone the larger array sometimes instead of copying?
+    # try shuffling the array instead of allocating new ones?
     memberships[left_n] = np.empty(node_counts[left_n], dtype=np.uint32)
     memberships[right_n] = np.empty(node_counts[right_n], dtype=np.uint32)
     c_update_memberships(
