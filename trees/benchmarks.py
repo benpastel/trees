@@ -326,9 +326,9 @@ if __name__ == '__main__':
       print(f'binary classification with {np.count_nonzero(train_y)} true and {np.count_nonzero(~train_y)} false')
 
     with timed('\ntrain DFS tree ...'):
-      # with profiled():
-      model: Any = None
-      model, _ = fit(train_X, train_y, Params(use_bfs_tree=False, tree_count=tree_count))
+      with profiled():
+        model: Any = None
+        model, _ = fit(train_X, train_y, Params(use_bfs_tree=False, tree_count=tree_count))
     print(model.__str__(verbose=False))
 
     with timed(f'  predict DFS tree...'):
