@@ -7,7 +7,6 @@ from trees.params import Params
 from trees.c.dfs_tree import (
   update_histograms as c_update_histograms,
   update_node_splits as c_update_node_splits,
-  update_memberships as c_update_memberships,
   eval_tree as c_eval_tree,
   copy_smaller as c_copy_smaller,
 )
@@ -244,9 +243,12 @@ def fit_tree(
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
 
-  # TODO read mean from hist; all in C
   for n, node in nodes.items():
-    node_means[n] = np.mean(node.y[~node.is_removed])
+
+    # find mean y by summing histogram stats
+    # any column works
+    node_means[n] = np.sum(hist_sums[n][0]) / np.sum(hist_counts[n][0])
+
     leaf_members = node.indices[~node.is_removed]
     preds[leaf_members] = node_means[n]
 
