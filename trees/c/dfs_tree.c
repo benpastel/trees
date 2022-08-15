@@ -307,9 +307,7 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
             for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
                 if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] <= val) {
                     // copy to child
-                    for (uint64_t c = 0; c < cols; c++) {
-                        child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
-                    }
+                    memcpy(child_X + child_r * cols, parent_X + parent_r * cols, cols * sizeof(uint8_t));
                     child_y[child_r] = parent_y[parent_r];
                     child_indices[child_r] = parent_indices[parent_r];
                     parent_is_removed[parent_r] = true;
@@ -321,9 +319,7 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
             for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
                 if (!parent_is_removed[parent_r] && parent_X[parent_r * cols + col] > val) {
                     // copy to child
-                    for (uint64_t c = 0; c < cols; c++) {
-                        child_X[child_r * cols + c] = parent_X[parent_r * cols + c];
-                    }
+                    memcpy(child_X + child_r * cols, parent_X + parent_r * cols, cols * sizeof(uint8_t));
                     child_y[child_r] = parent_y[parent_r];
                     child_indices[child_r] = parent_indices[parent_r];
                     parent_is_removed[parent_r] = true;
@@ -377,9 +373,7 @@ static PyObject* copy_smaller(PyObject *dummy, PyObject *args)
         for (uint64_t parent_r = 0; parent_r < parent_rows; parent_r++) {
             if (is_child[parent_r]) {
                 // copy to shared array
-                for (uint64_t c = 0; c < cols; c++) {
-                    child_X[local_child_r * cols + c] = parent_X[parent_r * cols + c];
-                }
+                memcpy(child_X + local_child_r * cols, parent_X + parent_r * cols, cols * sizeof(uint8_t));
                 child_y[local_child_r] = parent_y[parent_r];
                 child_indices[local_child_r] = parent_indices[parent_r];
                 // parent_is_removed[parent_r] = true; //  TODO try later

@@ -244,6 +244,7 @@ def fit_tree(
   node_means = np.zeros(node_count)
   preds = np.zeros(rows, dtype=np.float32)
 
+  # TODO read mean from hist; all in C
   for n, node in nodes.items():
     node_means[n] = np.mean(node.y[~node.is_removed])
     leaf_members = node.indices[~node.is_removed]

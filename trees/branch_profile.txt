@@ -1,0 +1,149 @@
+TREE_COUNT=10 python -m trees.benchmarks
+
+
+TREE_COUNT=10
+
+
+M5:
+
+loading from cache
+X.shape: train (37734424, 19), valid (9433606, 19)
+regression targets with min=0.0, max=763.0, mean=1.2
+
+train DFS tree ...
+         14706 function calls (14556 primitive calls) in 19.789 seconds
+
+   Ordered by: cumulative time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    1.868    1.868   19.790   19.790 /Users/benji/dev/trees/trees/model.py:120(fit)
+       10    5.002    0.500   12.802    1.280 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+        5    1.488    0.298    4.033    0.807 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+      320    3.278    0.010    3.278    0.010 {built-in method trees.c.dfs_tree.update_histograms}
+      310    2.730    0.009    2.730    0.009 {built-in method trees.c.dfs_tree.copy_smaller}
+        5    2.262    0.452    2.262    0.452 {built-in method trees.c.bfs_tree.apply_bins}
+       60    1.014    0.017    1.014    0.017 {built-in method numpy.arange}
+       52    0.943    0.018    0.943    0.018 {method 'astype' of 'numpy.ndarray' objects}
+  952/802    0.083    0.000    0.629    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
+     1356    0.555    0.000    0.555    0.000 {built-in method numpy.zeros}
+
+
+
+         14706 function calls (14556 primitive calls) in 19.789 seconds
+
+   Ordered by: cumulative time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    1.868    1.868   19.790   19.790 /Users/benji/dev/trees/trees/model.py:120(fit)
+       10    5.002    0.500   12.802    1.280 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+        5    1.488    0.298    4.033    0.807 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+      320    3.278    0.010    3.278    0.010 {built-in method trees.c.dfs_tree.update_histograms}
+      310    2.730    0.009    2.730    0.009 {built-in method trees.c.dfs_tree.copy_smaller}
+        5    2.262    0.452    2.262    0.452 {built-in method trees.c.bfs_tree.apply_bins}
+       60    1.014    0.017    1.014    0.017 {built-in method numpy.arange}
+       52    0.943    0.018    0.943    0.018 {method 'astype' of 'numpy.ndarray' objects}
+  952/802    0.083    0.000    0.629    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
+     1356    0.555    0.000    0.555    0.000 {built-in method numpy.zeros}
+
+
+         14706 function calls (14556 primitive calls) in 19.789 seconds
+
+   Ordered by: internal time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       10    5.002    0.500   12.802    1.280 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+      320    3.278    0.010    3.278    0.010 {built-in method trees.c.dfs_tree.update_histograms}
+      310    2.730    0.009    2.730    0.009 {built-in method trees.c.dfs_tree.copy_smaller}
+        5    2.262    0.452    2.262    0.452 {built-in method trees.c.bfs_tree.apply_bins}
+        1    1.868    1.868   19.790   19.790 /Users/benji/dev/trees/trees/model.py:120(fit)
+        5    1.488    0.298    4.033    0.807 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+       60    1.014    0.017    1.014    0.017 {built-in method numpy.arange}
+       52    0.943    0.018    0.943    0.018 {method 'astype' of 'numpy.ndarray' objects}
+     1356    0.555    0.000    0.555    0.000 {built-in method numpy.zeros}
+     1006    0.504    0.001    0.504    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+
+
+
+(19.9s)
+Regression model with 10 trees with sizes min=63 max=63 mean=63.0
+  predict DFS tree...
+(3.6s)
+
+      train: MSE: 4.60, MAE: 0.86
+      valid: MSE: 4.50, MAE: 0.85
+
+
+
+Grupo:
+
+loading from cache
+X.shape: train (33112214, 75), valid (8278053, 75)
+regression targets with min=0.0, max=5000.0, mean=7.3
+
+train DFS tree ...
+         28186 function calls (27286 primitive calls) in 48.445 seconds
+
+   Ordered by: cumulative time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    1.647    1.647   48.445   48.445 /Users/benji/dev/trees/trees/model.py:120(fit)
+        5    5.367    1.073   24.068    4.814 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+       10    5.562    0.556   22.415    2.241 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+        5   17.604    3.521   17.604    3.521 {built-in method trees.c.bfs_tree.apply_bins}
+      320    8.515    0.027    8.515    0.027 {built-in method trees.c.dfs_tree.update_histograms}
+      310    6.601    0.021    6.601    0.021 {built-in method trees.c.dfs_tree.copy_smaller}
+2232/1332    0.035    0.000    1.538    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
+     1256    1.292    0.001    1.292    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+      315    0.001    0.000    1.100    0.003 /usr/local/opt/python@3.8/Frameworks/Python.framework/Versions/3.8/lib/python3.8/site-packages/numpy/core/fromnumeric.py:69(_wrapreduction)
+       10    0.000    0.000    1.096    0.110 <__array_function__ internals>:177(all)
+
+
+
+         28186 function calls (27286 primitive calls) in 48.445 seconds
+
+   Ordered by: cumulative time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    1.647    1.647   48.445   48.445 /Users/benji/dev/trees/trees/model.py:120(fit)
+        5    5.367    1.073   24.068    4.814 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+       10    5.562    0.556   22.415    2.241 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+        5   17.604    3.521   17.604    3.521 {built-in method trees.c.bfs_tree.apply_bins}
+      320    8.515    0.027    8.515    0.027 {built-in method trees.c.dfs_tree.update_histograms}
+      310    6.601    0.021    6.601    0.021 {built-in method trees.c.dfs_tree.copy_smaller}
+2232/1332    0.035    0.000    1.538    0.001 {built-in method numpy.core._multiarray_umath.implement_array_function}
+     1256    1.292    0.001    1.292    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+      315    0.001    0.000    1.100    0.003 /usr/local/opt/python@3.8/Frameworks/Python.framework/Versions/3.8/lib/python3.8/site-packages/numpy/core/fromnumeric.py:69(_wrapreduction)
+       10    0.000    0.000    1.096    0.110 <__array_function__ internals>:177(all)
+
+
+         28186 function calls (27286 primitive calls) in 48.445 seconds
+
+   Ordered by: internal time
+   List reduced from 79 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        5   17.604    3.521   17.604    3.521 {built-in method trees.c.bfs_tree.apply_bins}
+      320    8.515    0.027    8.515    0.027 {built-in method trees.c.dfs_tree.update_histograms}
+      310    6.601    0.021    6.601    0.021 {built-in method trees.c.dfs_tree.copy_smaller}
+       10    5.562    0.556   22.415    2.241 /Users/benji/dev/trees/trees/dfs_tree.py:49(fit_tree)
+        5    5.367    1.073   24.068    4.814 /Users/benji/dev/trees/trees/model.py:94(apply_bins)
+        1    1.647    1.647   48.445   48.445 /Users/benji/dev/trees/trees/model.py:120(fit)
+     1256    1.292    0.001    1.292    0.001 {method 'reduce' of 'numpy.ufunc' objects}
+      310    0.891    0.003    0.891    0.003 {built-in method numpy.arange}
+     1356    0.640    0.000    0.640    0.000 {built-in method numpy.zeros}
+      375    0.170    0.000    0.170    0.000 {method 'sort' of 'numpy.ndarray' objects}
+
+
+
+(48.5s)
+Regression model with 10 trees with sizes min=63 max=63 mean=63.0
+  predict DFS tree...
+(5.8s)
+
+      train: MSE: 189.51, MAE: 4.10
+      valid: MSE: 192.61, MAE: 4.08
