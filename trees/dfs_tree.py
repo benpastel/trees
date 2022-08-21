@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import Optional, List
 
 import numpy as np
 
@@ -49,14 +49,17 @@ def fit_tree(
     X: np.ndarray,
     y: np.ndarray,
     bins: np.ndarray,
-    params: Params
-) -> Tuple[Tree, np.ndarray]:
+    params: Params,
+    preds: np.ndarray
+) -> Tree:
   rows, cols = X.shape
   assert X.dtype == np.uint8
-  assert y.dtype == np.double
+  assert y.dtype == np.float32
   assert y.shape == (rows,)
+  assert preds.shape == (rows,)
   assert bins.shape == (cols, params.bucket_count-1)
   assert bins.dtype == np.float32
+  assert preds.dtype == np.float32
   assert 2 <= params.bucket_count <= 256, 'buckets must fit in uint8'
   assert 0 < rows < 2**32-1, 'rows must fit in uint32'
   assert 0 < cols < 2**32-1, 'cols must fit in uint32'
@@ -78,7 +81,7 @@ def fit_tree(
   #   - count of rows in the node
   #   - best gain from splitting at this node
   node_counts = np.zeros(max_nodes, dtype=np.uint64)
-  node_gains = np.full(max_nodes, -np.inf, dtype=np.float64)
+  node_gains = np.full(max_nodes, -np.inf, dtype=np.float32)
 
   # histograms
   # node, col, val => stat where X[c] == val in this node
@@ -88,8 +91,8 @@ def fit_tree(
   # TODO why did I make the counts uint32? should be uint64 right?
   # TODO just use a node_idx => array dict
   hist_counts = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.uint32)
-  hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
-  hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float64)
+  hist_sums = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float32)
+  hist_sum_sqs = np.zeros((max_nodes, cols, params.bucket_count), dtype=np.float32)
 
   # root count
   node_counts[0] = rows
@@ -241,7 +244,6 @@ def fit_tree(
   # any node remaining in membership is a leaf
   # prediction for each row is the mean of the node the row is in
   node_means = np.zeros(node_count)
-  preds = np.zeros(rows, dtype=np.float32)
 
   for n, node in nodes.items():
 
@@ -250,7 +252,7 @@ def fit_tree(
     node_means[n] = np.sum(hist_sums[n][0]) / np.sum(hist_counts[n][0])
 
     leaf_members = node.indices[~node.is_removed]
-    preds[leaf_members] = node_means[n]
+    preds[leaf_members] += node_means[n]
 
   # convert the splits from binned uint8 values => original float32 values
   split_vals = np.zeros(node_count, dtype=np.float32)
@@ -273,7 +275,7 @@ def fit_tree(
     split_vals,
     left_children,
     node_means,
-  ), preds
+  )
 
 
 def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
@@ -281,7 +283,7 @@ def eval_tree(tree: Tree, X: np.ndarray) -> np.ndarray:
   assert X.dtype == np.float32
   rows, feats = X.shape
 
-  values = np.zeros(rows, dtype=np.double)
+  values = np.zeros(rows, dtype=np.float32)
   c_eval_tree(
     X,
     tree.split_cols,

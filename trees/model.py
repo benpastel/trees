@@ -4,21 +4,13 @@ from typing import Optional, List, Tuple, Union
 import numpy as np
 from scipy.stats import chi2
 
-from trees.params import Params
-from trees.bfs_tree import (
-  Tree as bfs_Tree,
-  fit_tree as bfs_fit_tree,
-  eval_tree as bfs_eval_tree
-)
-from trees.dfs_tree import (
-  Tree as dfs_Tree,
-  fit_tree as dfs_fit_tree,
-  eval_tree as dfs_eval_tree
-)
-from trees.c.bfs_tree import apply_bins as c_apply_bins
-from trees.utils import timed
+from trees.params import Params, DEBUG_STATS
+from trees.dfs_tree import Tree, fit_tree, eval_tree
 
-Tree = Union[dfs_Tree, bfs_Tree]
+# TODO rename file
+from trees.c.bfs_tree import apply_bins as c_apply_bins
+
+from trees.utils import timed
 
 @dataclass
 class Model:
@@ -35,7 +27,6 @@ class Model:
       s += ':\n'
       s += '\n'.join(str(t) for t in self.trees)
     return s
-
 
 def choose_bins(
     X: np.ndarray,
@@ -86,8 +77,7 @@ def choose_bins(
 
   # check bins are nondecreasing within each feature
   # by comparing all elements (skip the last) to their right neighbor (skip the first)
-  assert np.all(bins[:,:-1] <= bins[:,1:])
-
+  # assert np.all(bins[:,:-1] <= bins[:,1:])
   return bins
 
 
@@ -111,9 +101,21 @@ def apply_bins(
   assert out_bin_X.shape == (rows, cols)
   assert out_bin_X.dtype == np.uint8
 
+  if DEBUG_STATS:
+    orig_bin_X = out_bin_X.copy()
+
   c_apply_bins(X, bins, out_bin_X)
 
-  assert np.all(out_bin_X < splits+1)
+  if DEBUG_STATS:
+    changes_by_column = np.sum(orig_bin_X != out_bin_X, axis=0)
+
+    print(f"""
+      Bucketed {rows=}, {cols=}
+        total columns with changes: {np.sum(changes_by_column > 0)}
+        {changes_by_column=}
+      """)
+
+  # assert np.all(out_bin_X < splits+1)
 
 
 
@@ -122,6 +124,7 @@ def fit(
     y: np.ndarray,
     params: Params
 ) -> Tuple[Model, np.ndarray]:
+  # TODO: some unaccounted overhead here... maybe the `y` ops?
   rows, feats = X.shape
   assert y.shape == (rows,)
   assert 2 <= params.bucket_count <= 256
@@ -130,9 +133,9 @@ def fit(
   targets_are_float = (y.dtype != np.bool_)
 
   X = X.astype(np.float32, copy=False)
-  y = y.astype(np.double, copy=False)
+  y = y.astype(np.float32, copy=False)
   mean_y = float(np.mean(y))
-  preds = np.full(rows, mean_y, dtype=np.double)
+  preds = np.full(rows, mean_y, dtype=np.float32)
 
   bins = None
   bin_X = np.zeros((rows, feats), dtype=np.uint8)
@@ -149,20 +152,9 @@ def fit(
 
     target = params.learning_rate * (y - preds)
 
-    if params.use_bfs_tree:
-      tree, new_preds = bfs_fit_tree(bin_X, target, bins, params) # type: ignore
-
-      if tree.node_count == 1 and len(trees) > 1 and trees[-1].node_count == 1:
-        # 2 trees with 1 node in a row
-        # don't add the 2nd one, and stop early
-        return Model(trees, targets_are_float, mean_y), preds
-
-      trees.append(tree)
-    else:
-      tree, new_preds = dfs_fit_tree(bin_X, target, bins, params) # type: ignore
-      trees.append(tree)
-
-    preds += new_preds
+    # fit_tree also updates preds internally; this is more efficient than returning new preds
+    tree = fit_tree(bin_X, target, bins, params, preds) # type: ignore
+    trees.append(tree)
 
   return Model(trees, targets_are_float, mean_y), preds
 
@@ -171,13 +163,10 @@ def predict(model: Model, X: np.ndarray) -> np.ndarray:
   assert X.ndim == 2
   X = X.astype(np.float32, copy=False)
 
-  values = np.full(len(X), model.mean, dtype=np.double)
+  values = np.full(len(X), model.mean, dtype=np.float32)
 
   for tree in model.trees:
-    if isinstance(tree, bfs_Tree):
-      values += bfs_eval_tree(tree, X)
-    else:
-      values += dfs_eval_tree(tree, X)
+    values += eval_tree(tree, X)
 
   if model.targets_are_float:
     return values

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+DEBUG_STATS = False
+
 @dataclass
 class Params:
   use_bfs_tree: bool = True
