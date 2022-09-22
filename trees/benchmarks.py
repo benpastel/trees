@@ -155,44 +155,61 @@ def load_m5():
     #
     #   np.max(sales) == 763 so 80 is a safe scale for mean
     #   np.std is harder to predict, so use 10 to be more cautious
-    feats = 19
+    feats = 37
     X = np.zeros((target_days, feats, items), dtype=np.uint16)
     sales_T = sales.T
     for t in range(target_days):
       if (t % 100) == 0:
         print(f'{t}/{target_days}')
       d = t + 365
+      f = 0
 
-      # 1 feature: previous day
-      X[t, 0] = sales_T[d-1]
+      # previous day
+      X[t, f] = sales_T[d-1]
 
-      # 5 features: previous 7 days
-      X[t, 1] = sales_T[d-7]
-      X[t, 2] = np.mean(sales_T[d-7:d], axis=0) * 80
-      X[t, 3] = np.min(sales_T[d-7:d], axis=0)
-      X[t, 4] = np.max(sales_T[d-7:d], axis=0)
-      X[t, 5] = np.std(sales_T[d-7:d], axis=0) * 10
+      # previous 7 days
+      X[t, (f:=f+1)] = sales_T[d-7]
+      X[t, (f:=f+1)] = np.mean(sales_T[d-7:d], axis=0) * 80
+      X[t, (f:=f+1)] = np.min(sales_T[d-7:d], axis=0)
+      X[t, (f:=f+1)] = np.max(sales_T[d-7:d], axis=0)
+      X[t, (f:=f+1)] = np.std(sales_T[d-7:d], axis=0) * 10
+      X[t, (f:=f+1)] = sales_T[d-1] - sales_T[d-7]
+      X[t, (f:=f+1)] = sales_T[d-1] - np.mean(sales_T[d-7:d], axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-1] - sales_T[d-7:d])**2, axis=0)
 
-      # 4 features: previous 28 days
-      # (min is almost always going to be 0)
-      X[t, 6] = sales_T[d-28]
-      X[t, 7] = np.mean(sales_T[d-28:d], axis=0) * 80
-      X[t, 8] = np.max(sales_T[d-28:d], axis=0)
-      X[t, 9] = np.std(sales_T[d-28:d], axis=0) * 10
+      # previous 28 days
+      X[t, (f:=f+1)] = sales_T[d-28]
+      X[t, (f:=f+1)] = np.mean(sales_T[d-28:d], axis=0) * 80
+      X[t, (f:=f+1)] = np.max(sales_T[d-28:d], axis=0)
+      X[t, (f:=f+1)] = np.std(sales_T[d-28:d], axis=0) * 10
+      X[t, (f:=f+1)] = sales_T[d-1] - sales_T[d-28]
+      X[t, (f:=f+1)] = sales_T[d-7] - sales_T[d-28]
+      X[t, (f:=f+1)] = sales_T[d-1] - np.mean(sales_T[d-28:d], axis=0)
+      X[t, (f:=f+1)] = np.mean(sales_T[d-7:d], axis=0) - np.mean(sales_T[d-28:d], axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-1] - sales_T[d-28:d])**2, axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-7] - sales_T[d-28:d])**2, axis=0)
 
-      # 5 features: previous 365 days
-      # (min is almost always going to be 0)
-      X[t, 10] = sales_T[d-365]
-      X[t, 11] = np.mean(sales_T[d-365:d], axis=0) * 80
-      X[t, 12] = np.max(sales_T[d-365:d], axis=0)
-      X[t, 13] = np.std(sales_T[d-365:d], axis=0) * 10
+      # previous 365 days
+      X[t, (f:=f+1)] = sales_T[d-365]
+      X[t, (f:=f+1)] = np.mean(sales_T[d-365:d], axis=0) * 80
+      X[t, (f:=f+1)] = np.max(sales_T[d-365:d], axis=0)
+      X[t, (f:=f+1)] = np.std(sales_T[d-365:d], axis=0) * 10
+      X[t, (f:=f+1)] = sales_T[d-1] - sales_T[d-365]
+      X[t, (f:=f+1)] = sales_T[d-7] - sales_T[d-365]
+      X[t, (f:=f+1)] = sales_T[d-28] - sales_T[d-365]
+      X[t, (f:=f+1)] = sales_T[d-1] - np.mean(sales_T[d-28:d], axis=0)
+      X[t, (f:=f+1)] = np.mean(sales_T[d-7:d], axis=0) - np.mean(sales_T[d-365:d], axis=0)
+      X[t, (f:=f+1)] = np.mean(sales_T[d-28:d], axis=0) - np.mean(sales_T[d-365:d], axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-1] - sales_T[d-365:d])**2, axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-7] - sales_T[d-365:d])**2, axis=0)
+      X[t, (f:=f+1)] = np.mean((sales_T[d-28] - sales_T[d-365:d])**2, axis=0)
 
-      # 5 features: ordinals for the categorical variables
-      X[t, 14] = ordinals[0]
-      X[t, 15] = ordinals[1]
-      X[t, 16] = ordinals[2]
-      X[t, 17] = ordinals[3]
-      X[t, 18] = ordinals[4]
+      # ordinals for the categorical variables
+      X[t, (f:=f+1)] = ordinals[0]
+      X[t, (f:=f+1)] = ordinals[1]
+      X[t, (f:=f+1)] = ordinals[2]
+      X[t, (f:=f+1)] = ordinals[3]
+      X[t, (f:=f+1)] = ordinals[4]
 
     # (target_days, feats, items) => (items, target_days, feats)
     X = np.moveaxis(X, -1, 0)
@@ -300,7 +317,7 @@ if __name__ == '__main__':
     # 'Home Credit Default': load_credit,
     # 'Santander Value':     load_santander,
     'M5':                  load_m5,
-    'Grupo':               load_grupo,
+    # 'Grupo':               load_grupo,
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
@@ -341,51 +358,36 @@ if __name__ == '__main__':
     del valid_preds
     gc.collect()
 
-    # with timed(f'train xgboost with: {xgboost_args}...'):
-    #   if is_regression:
-    #     model = xgb.XGBRegressor(**xgboost_args)
-    #   else:
-    #     model = xgb.XGBClassifier(**xgboost_args)
-    #   model.fit(train_X, train_y)
+    with timed(f'train xgboost with: {xgboost_args}...'):
+      if is_regression:
+        model = xgb.XGBRegressor(**xgboost_args)
+      else:
+        model = xgb.XGBClassifier(**xgboost_args)
+      model.fit(train_X, train_y)
 
-    # with timed(f'predict xgboost...'):
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'predict xgboost...'):
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
-    # with timed(f'train lightgbm with: {lgb_args}...'):
-    #   if is_regression:
-    #     model = lgb.LGBMRegressor(**lgb_args)
-    #   else:
-    #     model = lgb.LGBMClassifier(**lgb_args)
-    #   model.fit(train_X, train_y)
+    with timed(f'train lightgbm with: {lgb_args}...'):
+      if is_regression:
+        model = lgb.LGBMRegressor(**lgb_args)
+      else:
+        model = lgb.LGBMClassifier(**lgb_args)
+      model.fit(train_X, train_y)
 
-    # with timed(f'predict lightgbm...'):
-    #   train_preds = model.predict(train_X)
-    #   valid_preds = model.predict(valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
-
-    # with timed('\ntrain BFS tree ...'):
-    #   # with profiled():
-    #   model, _ = fit(train_X, train_y, Params(use_bfs_tree=True, tree_count=tree_count))
-    # print(model.__str__(verbose=False))
-
-    # with timed(f'  predict BFS tree...'):
-    #   # with profiled():
-    #   train_preds = predict(model, train_X)
-    #   valid_preds = predict(model, valid_X)
-    # print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
-    # del model
-    # del train_preds
-    # del valid_preds
-    # gc.collect()
+    with timed(f'predict lightgbm...'):
+      train_preds = model.predict(train_X)
+      valid_preds = model.predict(valid_X)
+    print_stats(train_preds, train_y, valid_preds, valid_y, is_regression)
+    del model
+    del train_preds
+    del valid_preds
+    gc.collect()
 
 
