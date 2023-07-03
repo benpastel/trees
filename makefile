@@ -27,7 +27,7 @@ test: build
 	python3 -m pytest
 
 .PHONY: run
-run: build #test
+run: build test
 	TREE_COUNT=$(TREE_COUNT) python3 -m trees.benchmarks
 
 .PHONY: disassemble
