@@ -43,7 +43,7 @@ def split(all_X, all_y):
 
 def load_agaricus():
   X_svm, y = load_svmlight_file('data/agaricus/agaricus.txt.train')
-  return X_svm.toarray(), y.astype(np.bool)
+  return X_svm.toarray(), y.astype(np.bool_)
 
 
 def load_house_prices():
@@ -76,7 +76,7 @@ def load_house_prices():
 
 def load_credit():
   frame = pd.read_csv('data/credit/application_train.csv')
-  y = frame['TARGET'].values.astype(np.bool)
+  y = frame['TARGET'].values.astype(np.bool_)
 
   # for now we just take the numeric data
   X = np.zeros((len(frame), 104))
@@ -312,12 +312,12 @@ if __name__ == '__main__':
 
   # name => function that loads data and returns (X, y)
   benchmarks = {
-    # 'Agaricus':            load_agaricus,
-    # 'House Prices':        load_house_prices,
-    # 'Home Credit Default': load_credit,
-    # 'Santander Value':     load_santander,
+    'Agaricus':            load_agaricus,
+    'House Prices':        load_house_prices,
+    'Home Credit Default': load_credit,
+    'Santander Value':     load_santander,
     'M5':                  load_m5,
-    # 'Grupo':               load_grupo,
+    'Grupo':               load_grupo,
   }
 
   xgboost_args = {'n_estimators': tree_count, 'tree_method': 'hist'}
