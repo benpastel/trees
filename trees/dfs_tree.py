@@ -49,6 +49,8 @@ def fit_tree(
   # TODO promote X indices to uint64 to avoid this?
   assert 0 < rows * cols< 2**32-1, 'rows * cols must fit in uint32'
 
+  assert cols % 16 == 0
+
   split_cols = np.zeros(max_nodes, dtype=np.uint32)
   split_bins = np.zeros(max_nodes, dtype=np.uint8)
   left_children = np.zeros(max_nodes, dtype=np.uint16)
@@ -56,6 +58,10 @@ def fit_tree(
   # node => array of rows belonging to it
   # initially all rows belong to root (0)
   # TODO since we special-case the root, maybe remove this?
+  #
+  # TODO: try:
+  #   node => list indexed by y bucket of array of rows belonging to it
+  #   ...
   memberships = {0: np.arange(rows, dtype=np.uint32)}
 
   # node stats:

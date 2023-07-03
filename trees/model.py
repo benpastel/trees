@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Optional, List, Tuple, Union
+from math import ceil
 
 import numpy as np
 from scipy.stats import chi2
@@ -131,7 +132,15 @@ def fit(
   assert 0 < params.trees_per_bucketing
   targets_are_float = (y.dtype != np.bool_)
 
-  X = X.astype(np.float32, copy=False)
+  # X = X.astype(np.float32, copy=False)
+  # round up to multiple of 16
+  cols = int(ceil(feats / 16))
+  print(f"Columns {feats} => {cols}")
+  pad_X = np.zeros((rows, cols), dtype=np.float32)
+  pad_X[:, :feats] = X
+  X = pad_X
+  feats = cols
+
   y = y.astype(np.float32, copy=False)
   mean_y = float(np.mean(y))
   preds = np.full(rows, mean_y, dtype=np.float32)

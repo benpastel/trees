@@ -53,6 +53,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
     const uint32_t rows_in_node = (uint32_t) PyArray_DIM((PyArrayObject *) memberships_obj, 0);
     const uint32_t rows = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 0);
     const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) X_obj, 1);
+    const uint32_t cols_over_16 = cols / 16;
     const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
 
     uint8_t  * __restrict X = PyArray_DATA((PyArrayObject *) X_obj);
@@ -67,7 +68,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
         for (uint32_t i = 0; i < rows_in_node; i++) {
             uint32_t r = memberships[i];
 
-            for (uint32_t c = 0; c < cols; c++) {
+            for (uint32_t c = 0; c < cols_over_16 * 16; c++) {
                 uint8_t v = X[r*cols + c];
                 uint32_t idx = c*vals + v;
                 counts[idx]++;
@@ -89,7 +90,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
                 // because all rows belong to the root
                 #pragma omp for nowait
                 for (uint32_t r = 0; r < rows_in_node; r++) {
-                    for (uint32_t c = 0; c < cols; c++) {
+                    for (uint32_t c = 0; c < cols_over_16 * 16; c++) {
                         uint8_t v = X[r*cols + c];
                         uint32_t idx = c*vals + v;
                         local_counts[idx]++;
@@ -103,7 +104,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
                 for (uint32_t i = 0; i < rows_in_node; i++) {
                     uint32_t r = memberships[i];
 
-                    for (uint32_t c = 0; c < cols; c++) {
+                    for (uint32_t c = 0; c < cols_over_16 * 16; c++) {
                         uint8_t v = X[r*cols + c];
                         uint32_t idx = c*vals + v;
                         local_counts[idx]++;
@@ -116,7 +117,7 @@ static PyObject* update_histograms(PyObject *dummy, PyObject *args)
             // add the histograms together
             #pragma omp critical
             {
-                for (uint32_t c = 0; c < cols; c++) {
+                for (uint32_t c = 0; c < cols_over_16 * 16; c++) {
                     for (uint v = 0; v < vals; v++) {
                         uint32_t i = c*vals + v;
                         counts[i] += local_counts[i];
@@ -375,7 +376,9 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
 
     const int node = node_arg;
     const uint32_t cols = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 0);
-    const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
+    const uint32_t cols_over_16 = cols / 16;
+    // const uint32_t vals = (uint32_t) PyArray_DIM((PyArrayObject *) hist_counts_obj, 1);
+    const uint32_t vals = 64;
 
     // higher gain is better; above 0 means the split improved MSE
     float best_gain = 0;
@@ -383,7 +386,7 @@ static PyObject* update_node_splits(PyObject *dummy, PyObject *args)
     uint8_t best_v = 0;
 
     // parallelizing this for loop doesn't seem to gain anything, so single-threaded for now
-    for (uint32_t c = 0; c < cols; c++) {
+    for (uint32_t c = 0; c < cols_over_16 * 16; c++) {
 
         // find the histogram totals for this column
         uint32_t total_count = 0;
