@@ -1,6 +1,5 @@
 COMPILED_BFS := trees/c/bfs_tree.cpython-38-darwin.so
 COMPILED_DFS := trees/c/dfs_tree.cpython-38-darwin.so
-TREE_COUNT ?= 10
 
 .PHONY: install-deps
 install-deps:
@@ -26,9 +25,14 @@ build: lint
 test: build
 	python3 -m pytest
 
+TREE_COUNT ?= 10
+OURS_ONLY ?= 0
+M5_ONLY ?= 0
+
 .PHONY: run
 run: build test
-	TREE_COUNT=$(TREE_COUNT) python3 -m trees.benchmarks
+	TREE_COUNT=$(TREE_COUNT) OURS_ONLY=$(OURS_ONLY) M5_ONLY=$(M5_ONLY) \
+		python3 -m trees.benchmarks
 
 .PHONY: disassemble
 disassemble:
