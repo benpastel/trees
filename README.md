@@ -10,9 +10,7 @@ There are 3 tricks related to regularization:
 (2) use Laplacian smoothing on the leaf weights
 (3) re-bin frequently and semi-randomly
 
-With better regularization, it becomes practical to use TRINARY trees.  This has a bit better accuracy XGBoost and LightGBM on most of my (extremely crude) benchmarks.
-
-See #implementation-tricks below for more details.
+With better regularization, it becomes practical to use TRINARY trees.  This has a bit better accuracy XGBoost and LightGBM on most of my (crude) benchmarks.
 
 ## Installation
 TODO:
@@ -36,5 +34,4 @@ make run TREE_COUNT=100
 ```
 This builds the C code, runs tests, and then runs a suite of benchmarks against XGBoost.  Smaller tree counts are faster when iterating quickly on new ideas.
 
-## Implementation Tricks
 
